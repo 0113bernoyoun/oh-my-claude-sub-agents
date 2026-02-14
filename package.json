@@ -1,0 +1,44 @@
+{
+  "name": "oh-my-claude-sub-agents",
+  "version": "0.1.0",
+  "description": "Auto-detect custom Claude Code agents and add OMC-level orchestration with one command",
+  "type": "module",
+  "main": "dist/cli/index.js",
+  "bin": {
+    "omcsa": "dist/cli/index.js",
+    "oh-my-claude-sub-agents": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli/index.js",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agents",
+    "orchestration",
+    "sub-agents",
+    "automation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "yaml": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ]
+}

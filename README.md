@@ -1,0 +1,479 @@
+# oh-my-claude-sub-agents (OMCSA)
+
+Your custom Claude Code agents deserve pro-level orchestration.
+One command to turn your `.claude/agents/` into a coordinated team.
+
+Inspired by [oh-my-claudecode](https://github.com/anthropics/claude-code).
+
+[**한국어 README**](./README.ko.md)
+
+---
+
+## What This Does
+
+If you have custom sub-agents defined in `.claude/agents/*.md`, OMCSA gives them:
+
+- **Orchestrator prompt** — Claude automatically delegates to the right agent
+- **Parallel execution** (Ultrawork mode) — run multiple agents simultaneously
+- **Persistent loops** (Ralph mode) — keep working until truly done
+- **Delegation enforcement** — prevent the orchestrator from doing work directly
+- **Model tiering** — route to haiku/sonnet/opus based on agent config
+
+All via a single `omcsa init`.
+
+### OMC Coexistence (3-Mode System)
+
+Already using [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) (OMC)? OMCSA detects it automatically and offers three install modes to avoid hook conflicts:
+
+| Mode | Description | OMCSA Hooks | OMCSA Prompt |
+|------|-------------|-------------|--------------|
+| `standalone` | OMCSA handles everything (default) | Active | Yes |
+| `omc-only` | OMC handles modes, OMCSA adds agent orchestration | Yield | Yes |
+| `integrated` | OMC + OMCSA agents fully integrated | Yield | Yes |
+
+---
+
+## Requirements
+
+- **Node.js** >= 18
+- **Claude Code** CLI installed and working
+- Custom agents in `~/.claude/agents/` (global) and/or `.claude/agents/` (per-project)
+
+---
+
+## Installation
+
+### Option A: Run directly with npx (no install needed)
+
+```bash
+cd your-project
+npx oh-my-claude-sub-agents init
+```
+
+### Option B: Install globally
+
+```bash
+npm install -g oh-my-claude-sub-agents
+
+# Now use anywhere
+omcsa init
+```
+
+### Option C: Local development (from source)
+
+```bash
+git clone https://github.com/your-username/oh-my-claude-sub-agents.git
+cd oh-my-claude-sub-agents
+npm install
+npm run build
+npm link    # registers 'omcsa' command globally
+```
+
+---
+
+## Quick Start
+
+### 1. Make sure you have agents
+
+OMCSA works with agent `.md` files that have YAML frontmatter:
+
+```
+~/.claude/agents/          ← global agents (all projects)
+  code-reviewer.md
+  test-writer.md
+
+your-project/.claude/agents/   ← project-specific agents
+  backend-dev.md
+  frontend-dev.md
+```
+
+Each agent file looks like:
+
+```markdown
+---
+description: Implement backend APIs and server logic
+model: sonnet
+---
+
+You are a backend developer. Your role is to...
+```
+
+Supported frontmatter fields:
+
+| Field | Required | Values | Description |
+|-------|----------|--------|-------------|
+| `description` | Recommended | any string | What this agent does |
+| `model` | Optional | `haiku`, `sonnet`, `opus` | Model tier for Task tool |
+| `disallowedTools` | Optional | tool names | Tools this agent cannot use |
+
+### 2. Initialize OMCSA in your project
+
+```bash
+cd your-project
+omcsa init
+```
+
+This will:
+1. Scan `~/.claude/agents/` and `.claude/agents/` for all agent files
+2. Detect OMC (oh-my-claudecode) if installed
+3. Generate an orchestrator prompt and append it to `.claude/CLAUDE.md`
+4. Install smart hook scripts into `.claude/hooks/`
+5. Register hooks in `.claude/settings.json`
+6. Save install mode to `.omcsa/mode.json`
+
+If OMC is detected, you'll see an advisory suggesting `--mode integrated`.
+
+### 3. Use Claude Code as normal
+
+```bash
+claude
+```
+
+Claude will now automatically delegate tasks to your agents.
+
+---
+
+## Usage Modes
+
+### Normal Mode
+
+Just use Claude Code normally. The orchestrator prompt guides Claude to delegate to your agents.
+
+```
+> Implement the user authentication API
+
+# Claude delegates to backend-dev agent automatically
+```
+
+### Ultrawork Mode (Parallel Execution)
+
+Prefix your prompt with `ultrawork:` or `ulw:` to run agents in parallel.
+
+```
+> ultrawork: Build the login page frontend and the auth API backend
+
+# Claude launches frontend-dev and backend-dev simultaneously
+```
+
+### Ralph Mode (Persistent Loop)
+
+Prefix with `ralph:` to keep Claude working until everything is truly complete.
+
+```
+> ralph: Implement the full checkout flow with tests and code review
+
+# Claude keeps iterating until all tasks pass verification
+```
+
+### Cancel Active Mode
+
+```bash
+# From CLI
+omcsa cancel
+
+# Or in Claude Code prompt
+> cancelomcsa
+```
+
+---
+
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `omcsa init` | Initial setup: scan agents, generate prompt, install hooks |
+| `omcsa init --config` | Same as init but also generates `omcsa.config.json` for fine-tuning |
+| `omcsa init --mode <mode>` | Init with explicit mode: `standalone`, `omc-only`, or `integrated` |
+| `omcsa switch <mode>` | Switch install mode at runtime (no reinstall needed) |
+| `omcsa status` | Show current configuration, OMC detection, and install mode |
+| `omcsa refresh` | Re-scan agents and regenerate orchestrator prompt |
+| `omcsa apply` | Re-apply config changes after editing `omcsa.config.json` |
+| `omcsa cancel` | Cancel any active persistent mode (ralph/ultrawork) |
+| `omcsa omc disable` | Disable OMC plugin globally (removes from `~/.claude/settings.json`) |
+| `omcsa omc enable` | Re-enable OMC plugin (restore from backup) |
+| `omcsa uninstall` | Remove all OMCSA components from the project |
+
+---
+
+## Configuration (Optional)
+
+For fine-grained control, generate a config file:
+
+```bash
+omcsa init --config
+```
+
+This creates `.claude/omcsa.config.json`:
+
+```json
+{
+  "agents": {
+    "backend-dev": { "tier": "MEDIUM", "category": "implementation" },
+    "code-reviewer": { "tier": "HIGH", "category": "review" },
+    "test-writer": { "tier": "LOW", "category": "testing" }
+  },
+  "features": {
+    "ultrawork": true,
+    "ralph": true,
+    "delegationEnforcement": "warn",
+    "modelTiering": true
+  },
+  "keywords": {
+    "ultrawork": ["ultrawork", "ulw"],
+    "ralph": ["ralph", "must complete", "until done"],
+    "cancel": ["cancelomcsa", "stopomcsa"]
+  },
+  "persistence": {
+    "maxIterations": 10,
+    "stateDir": ".omcsa/state"
+  }
+}
+```
+
+After editing, run `omcsa apply` to regenerate.
+
+### Delegation Enforcement Levels
+
+| Level | Behavior |
+|-------|----------|
+| `off` | No restrictions |
+| `warn` (default) | Warns when orchestrator tries to edit source files directly |
+| `strict` | Blocks direct source file edits, forces delegation |
+
+---
+
+## Defining Agent Workflows
+
+OMCSA respects workflows you define in `.claude/CLAUDE.md`.
+
+The orchestrator prompt includes a **Workflow & Convention Integration** section that instructs Claude to follow all rules, workflows, and conventions written in your CLAUDE.md.
+
+### Example
+
+Write your workflows in `.claude/CLAUDE.md` (above or below the OMCSA section):
+
+```markdown
+## Team Workflow
+
+- After `backend-dev` completes, route to `code-reviewer` for review
+- `code-reviewer` feedback goes back to `backend-dev` for fixes
+- `test-writer` runs after all implementation agents finish
+- On completion, create a summary in `docs/completed/`
+```
+
+OMCSA's orchestrator will follow these rules automatically. No extra configuration needed.
+
+### How It Works
+
+1. Claude Code loads the full `.claude/CLAUDE.md` into its system prompt
+2. Your workflow rules are visible to the orchestrator alongside the OMCSA section
+3. The OMCSA prompt explicitly tells Claude: "Follow all workflow rules in this document"
+4. Agent chaining happens at the orchestrator level (sub-agents can't call other agents)
+
+---
+
+## OMC Coexistence
+
+If you have [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) (OMC) installed as a global plugin, OMCSA automatically detects it and prevents hook conflicts.
+
+### The Problem
+
+OMC and OMCSA both register hooks on the same events (UserPromptSubmit, Stop, PreToolUse). Without coexistence mode, this causes:
+- Double keyword detection (ultrawork/ralph triggered twice)
+- Double Stop hook execution
+- Conflicting delegation enforcement
+
+### The Solution: Smart Hooks
+
+OMCSA hooks are "smart" — they read `.omcsa/mode.json` at runtime and decide whether to execute or yield:
+
+```
+standalone mode  → OMCSA hooks execute normally
+omc-only mode    → OMCSA hooks yield ({ continue: true })
+integrated mode  → OMCSA hooks yield ({ continue: true })
+```
+
+Hooks are always installed regardless of mode. Switching modes only updates `mode.json` — no reinstallation needed.
+
+### Agent Exclusivity (Standalone Mode)
+
+When OMCSA detects OMC in standalone mode, the orchestrator prompt includes an **Agent Exclusivity** directive
+that instructs Claude to ONLY use OMCSA-managed agents and ignore OMC's built-in agents (e.g. `oh-my-claudecode:architect`).
+
+This is a prompt-level enforcement. For stronger isolation, use `omcsa omc disable` to remove OMC entirely.
+
+### Disabling OMC Plugin
+
+For complete isolation from OMC agents, you can temporarily disable the OMC plugin:
+
+```bash
+# Disable OMC (removes from ~/.claude/settings.json)
+omcsa omc disable
+
+# Re-enable OMC (restores from backup)
+omcsa omc enable
+```
+
+> **Warning**
+>
+> `omcsa omc disable` modifies your **global** `~/.claude/settings.json` file.
+> This affects ALL projects and Claude Code sessions, not just the current project.
+>
+> - The disabled OMC plugin entry is backed up to `.omcsa/omc-backup.json`
+> - Use `omcsa omc enable` to restore the original configuration
+> - If the backup file is lost, you will need to manually re-add the OMC plugin
+> - Always run `omcsa omc enable` before uninstalling OMCSA to restore OMC
+
+### Usage
+
+```bash
+# Default: standalone (OMCSA does everything)
+omcsa init
+
+# With OMC: let OMC handle modes, OMCSA adds orchestration
+omcsa init --mode integrated
+
+# Switch mode at runtime (instant, no reinstall)
+omcsa switch integrated
+omcsa switch standalone
+
+# Check current mode
+omcsa status
+```
+
+### Mode Details
+
+| | standalone | omc-only | integrated |
+|---|---|---|---|
+| CLAUDE.md orchestrator | Full | Prompt only | Prompt only |
+| Hooks installed | Yes | Yes (yield) | Yes (yield) |
+| settings.json | Yes | Yes | Yes |
+| ultrawork/ralph | OMCSA | OMC | OMC |
+| Agent delegation | OMCSA exclusive | OMC 28 + custom list | OMC + custom |
+
+---
+
+## What Gets Created
+
+After `omcsa init`, your project will have:
+
+```
+your-project/
+├── .claude/
+│   ├── CLAUDE.md              ← orchestrator prompt appended here
+│   ├── settings.json          ← hook registrations added here
+│   ├── hooks/
+│   │   ├── omcsa-keyword-detector.mjs    ← detects ultrawork/ralph keywords
+│   │   ├── omcsa-persistent-mode.mjs     ← keeps ralph mode running
+│   │   └── omcsa-pre-tool-use.mjs        ← delegation enforcement
+│   └── agents/                ← your existing agents (untouched)
+│       ├── backend-dev.md
+│       └── ...
+└── .omcsa/
+    ├── mode.json              ← current install mode (standalone/omc-only/integrated)
+    ├── omc-backup.json        ← OMC plugin backup (created by `omc disable`)
+    └── state/                 ← runtime state for persistent modes
+```
+
+### CLAUDE.md Markers
+
+OMCSA only modifies content between its markers:
+
+```markdown
+# Your existing CLAUDE.md content (preserved)
+
+<!-- [OMCSA:START] - Auto-generated by oh-my-claude-sub-agents. Do not edit manually. -->
+## Agent Orchestration
+...
+<!-- [OMCSA:END] -->
+
+# More of your content (preserved)
+```
+
+Running `omcsa refresh` or `omcsa uninstall` only touches content between these markers.
+
+---
+
+## Agent File Examples
+
+### Implementation Agent
+
+```markdown
+---
+description: Implement React/Next.js frontend features
+model: sonnet
+---
+
+You are a frontend developer specializing in React and Next.js.
+
+## Your Role
+- Implement UI components and pages
+- Follow the project's component patterns
+- Write clean, accessible JSX/TSX
+
+## Constraints
+- Work ALONE. Do not spawn other agents.
+- Follow existing code conventions.
+```
+
+### Review Agent (Read-Only)
+
+```markdown
+---
+description: Code review and quality verification
+model: opus
+disallowedTools: Write, Edit, MultiEdit
+---
+
+You are a senior code reviewer.
+
+## Your Role
+- Review code for correctness, security, and maintainability
+- Provide actionable feedback with file:line references
+- You are READ-ONLY. You cannot modify files.
+```
+
+### Lightweight Agent
+
+```markdown
+---
+description: Write unit and integration tests
+model: haiku
+---
+
+You are a test writer. Write comprehensive tests for the given code.
+```
+
+---
+
+## Subscription vs API Users
+
+OMCSA works with both Claude Code subscription plans and API keys.
+
+- **Model tiering**: If an agent specifies `model: opus` but your plan doesn't support it, Claude automatically falls back to the next available model
+- **No API key required**: All features work through CLAUDE.md prompts and hooks
+- **Rate limits**: Subscription users may hit rate limits with heavy parallel execution. Reduce concurrency if needed
+
+---
+
+## Uninstalling
+
+```bash
+omcsa uninstall
+```
+
+This removes:
+- Hook scripts from `.claude/hooks/`
+- OMCSA section from `.claude/CLAUDE.md`
+- Hook registrations from `.claude/settings.json`
+- State directory `.omcsa/`
+
+Your agent files in `.claude/agents/` are never touched.
+
+---
+
+## License
+
+MIT
+
+Inspired by [oh-my-claudecode](https://github.com/anthropics/claude-code) (MIT License).
