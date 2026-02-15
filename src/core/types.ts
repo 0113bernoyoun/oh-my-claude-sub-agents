@@ -187,6 +187,16 @@ export interface PromptGenerationOptions {
   config?: OmcsaConfig;
 }
 
+// ─── Log Types ──────────────────────────────────────────────────────────────
+
+export interface AgentLogEntry {
+  agent: string;
+  model: string;
+  description: string;
+  timestamp: string;
+  sessionId: string;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const MODEL_TIER_MAP: Record<ModelName, ModelTier> = {

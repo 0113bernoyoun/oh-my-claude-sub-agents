@@ -29,6 +29,11 @@ const HOOKS = [
     event: 'PreToolUse',
     description: 'OMCSA delegation enforcement',
   },
+  {
+    name: 'post-tool-logger.mjs',
+    event: 'PostToolUse',
+    description: 'OMCSA agent delegation logger',
+  },
 ];
 
 /**

@@ -57,9 +57,11 @@ program
 program
   .command('status')
   .description('Show current OMCSA configuration status')
-  .action(async () => {
+  .option('--logs', 'Show today\'s full orchestration log')
+  .option('--clean-logs <days>', 'Remove logs older than N days')
+  .action(async (options) => {
     const { runStatus } = await import('./status.js');
-    await runStatus();
+    await runStatus(options);
   });
 
 program

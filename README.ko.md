@@ -186,6 +186,8 @@ omcsa cancel
 | `omcsa init --maturity <mode>` | 성숙도 모드 지정: `auto`, `full`, `LOW`, `MEDIUM`, `HIGH` |
 | `omcsa switch <mode>` | 런타임 모드 전환 (재설치 불필요) |
 | `omcsa status` | 현재 설정 상태, OMC 감지 결과, 설치 모드 확인 |
+| `omcsa status --logs` | 오늘의 전체 오케스트레이션 로그 표시 |
+| `omcsa status --clean-logs <N>` | N일 이전 로그 삭제 |
 | `omcsa refresh` | 에이전트 재스캔 및 오케스트레이터 프롬프트 재생성 |
 | `omcsa refresh --maturity <mode>` | 재스캔 + 성숙도 모드 적용 |
 | `omcsa apply` | `omcsa.config.json` 수정 후 재적용 |
@@ -429,13 +431,16 @@ your-project/
 │   ├── hooks/
 │   │   ├── omcsa-keyword-detector.mjs    ← ultrawork/ralph 키워드 감지
 │   │   ├── omcsa-persistent-mode.mjs     ← ralph 모드 지속 실행
-│   │   └── omcsa-pre-tool-use.mjs        ← 위임 강제
+│   │   ├── omcsa-pre-tool-use.mjs        ← 위임 강제
+│   │   └── omcsa-post-tool-logger.mjs   ← 에이전트 위임 로거
 │   └── agents/                ← 기존 에이전트 파일 (변경 없음)
 │       ├── backend-dev.md
 │       └── ...
 └── .omcsa/
     ├── mode.json              ← 현재 설치 모드 (standalone/omc-only/integrated)
     ├── omc-backup.json        ← OMC 플러그인 백업 (`omc disable` 시 생성)
+    ├── logs/                  ← 에이전트 위임 로그 (JSONL, 일별 파일)
+    │   └── 2026-02-15.jsonl
     └── state/                 ← 지속 모드 런타임 상태
 ```
 
@@ -553,6 +558,20 @@ omcsa apply --dry-run    # apply 변경 사항 미리보기
 ```
 
 생성/수정될 파일과 OMCSA 섹션 diff를 표시합니다.
+
+---
+
+## 오케스트레이션 로그
+
+OMCSA는 PostToolUse hook을 통해 에이전트 위임을 자동으로 기록합니다. Claude가 Task 도구로 서브 에이전트에 작업을 위임할 때마다 에이전트 타입, 모델, 설명이 기록됩니다.
+
+오케스트레이션 활동 확인:
+
+- `omcsa status` — 하단에 마지막 세션 요약 표시
+- `omcsa status --logs` — 오늘의 전체 로그 표시
+- `omcsa status --clean-logs 7` — 7일 이전 로그 삭제
+
+로그는 `.omcsa/logs/`에 JSONL 파일(일별)로 저장됩니다. `.omcsa/`를 `.gitignore`에 추가하세요 — 기본적으로 이미 제외됩니다.
 
 ---
 

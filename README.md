@@ -188,6 +188,8 @@ omcsa cancel
 | `omcsa init --maturity <mode>` | Set maturity mode: `full`, `auto`, `LOW`, `MEDIUM`, or `HIGH` |
 | `omcsa switch <mode>` | Switch install mode at runtime (no reinstall needed) |
 | `omcsa status` | Show current configuration, OMC detection, and install mode |
+| `omcsa status --logs` | Show today's full orchestration log |
+| `omcsa status --clean-logs <N>` | Remove logs older than N days |
 | `omcsa refresh` | Re-scan agents and regenerate orchestrator prompt |
 | `omcsa refresh --maturity <mode>` | Re-scan with specified maturity mode |
 | `omcsa apply` | Re-apply config changes after editing `omcsa.config.json` |
@@ -428,13 +430,16 @@ your-project/
 │   ├── hooks/
 │   │   ├── omcsa-keyword-detector.mjs    ← detects ultrawork/ralph keywords
 │   │   ├── omcsa-persistent-mode.mjs     ← keeps ralph mode running
-│   │   └── omcsa-pre-tool-use.mjs        ← delegation enforcement
+│   │   ├── omcsa-pre-tool-use.mjs        ← delegation enforcement
+│   │   └── omcsa-post-tool-logger.mjs   ← agent delegation logger
 │   └── agents/                ← your existing agents (untouched)
 │       ├── backend-dev.md
 │       └── ...
 └── .omcsa/
     ├── mode.json              ← current install mode (standalone/omc-only/integrated)
     ├── omc-backup.json        ← OMC plugin backup (created by `omc disable`)
+    ├── logs/                  ← agent delegation logs (JSONL, per-day)
+    │   └── 2026-02-15.jsonl
     └── state/                 ← runtime state for persistent modes
 ```
 
@@ -552,6 +557,20 @@ omcsa apply --dry-run    # Preview apply changes
 ```
 
 Shows which files would be created/modified and OMCSA section diff.
+
+---
+
+## Orchestration Logs
+
+OMCSA automatically logs agent delegations via a PostToolUse hook. Every time Claude delegates to a sub-agent using the Task tool, the agent type, model, and description are recorded.
+
+View the latest orchestration activity:
+
+- `omcsa status` — shows last session summary at the bottom
+- `omcsa status --logs` — shows today's full log
+- `omcsa status --clean-logs 7` — remove logs older than 7 days
+
+Logs are stored in `.omcsa/logs/` as JSONL files (one per day). Add `.omcsa/` to your `.gitignore` — it's already excluded by default.
 
 ---
 

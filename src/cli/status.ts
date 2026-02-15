@@ -15,6 +15,7 @@ import { OMCSA_MARKER_START } from '../core/types.js';
 import { detectOmc, loadMode } from '../core/omc-detector.js';
 import { analyzeMaturity } from '../core/maturity-analyzer.js';
 import { removeOmcsaSection } from '../core/prompt-generator.js';
+import { getLastSession, getTodayLogs, cleanOldLogs } from '../core/log-reader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,7 +30,7 @@ function getVersion(): string {
   }
 }
 
-export async function runStatus(): Promise<void> {
+export async function runStatus(options?: { logs?: boolean; cleanLogs?: string }): Promise<void> {
   const projectRoot = process.cwd();
 
   console.log(chalk.cyan(`\n  OMCSA Status`) + chalk.dim(` (v${getVersion()})`) + '\n');
@@ -167,6 +168,58 @@ export async function runStatus(): Promise<void> {
   // Maturity config
   if (config.maturity?.mode) {
     console.log(chalk.dim(`  Maturity mode: ${config.maturity.mode}`));
+  }
+
+  // ── Clean logs option ──
+  if (options?.cleanLogs !== undefined) {
+    const days = parseInt(options.cleanLogs, 10);
+    if (isNaN(days) || days < 0) {
+      console.log(chalk.red('\n  Error: --clean-logs requires a non-negative number'));
+    } else {
+      const removed = cleanOldLogs(projectRoot, days);
+      console.log(chalk.cyan(`\n  Cleaned ${removed} log file(s) older than ${days} day(s)`));
+    }
+    console.log();
+    return;
+  }
+
+  // ── Full logs option ──
+  if (options?.logs) {
+    const todayLogs = getTodayLogs(projectRoot);
+    if (todayLogs.length === 0) {
+      console.log(chalk.dim('\n  Orchestration Log: No agent delegations recorded today.'));
+    } else {
+      console.log(chalk.cyan(`\n  Orchestration Log (today, ${todayLogs.length} entries):`));
+      for (const entry of todayLogs) {
+        const time = entry.timestamp.slice(11, 19);
+        const model = entry.model !== 'default' ? chalk.dim(` (${entry.model})`) : '';
+        console.log(`    ${chalk.dim(time)} ${chalk.green(entry.agent)}${model} — ${entry.description}`);
+      }
+    }
+    console.log();
+    return;
+  }
+
+  // ── Last Orchestration summary ──
+  const lastSession = getLastSession(projectRoot);
+  if (lastSession) {
+    const lastTime = new Date(lastSession.lastTimestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - lastTime.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    const agoStr = diffMin < 1 ? 'just now' : diffMin < 60 ? `${diffMin}min ago` : `${Math.floor(diffMin / 60)}h ago`;
+
+    console.log(chalk.cyan(`\n  Last Orchestration (${agoStr}):`));
+    for (let i = 0; i < lastSession.entries.length; i++) {
+      const entry = lastSession.entries[i];
+      const isLast = i === lastSession.entries.length - 1;
+      const prefix = isLast ? '  └─' : '  ├─';
+      const model = entry.model !== 'default' ? chalk.dim(` (${entry.model})`) : '';
+      console.log(`${prefix} ${chalk.green(entry.agent)}${model}    — ${entry.description}`);
+    }
+    console.log(chalk.dim(`\n  Agents used: ${lastSession.agentCount}`));
+  } else {
+    console.log(chalk.dim('\n  Orchestration Log: No agent delegations recorded yet.'));
   }
 
   console.log();
