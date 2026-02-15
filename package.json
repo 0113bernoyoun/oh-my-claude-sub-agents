@@ -25,6 +25,10 @@
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0113bernoyoun/oh-my-claude-sub-agents"
+  },
   "dependencies": {
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
