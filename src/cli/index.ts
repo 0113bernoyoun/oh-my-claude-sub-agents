@@ -37,6 +37,8 @@ program
   .description('Initialize OMCSA: scan agents, generate orchestrator prompt, install hooks')
   .option('--config', 'Generate omcsa.config.json for fine-grained control')
   .option('--mode <mode>', 'Install mode: standalone | omc-only | integrated')
+  .option('--maturity <mode>', 'Maturity mode: auto | full | LOW | MEDIUM | HIGH')
+  .option('--dry-run', 'Preview changes without applying them')
   .action(async (options) => {
     const { runInit } = await import('./init.js');
     await runInit(options);
@@ -45,9 +47,11 @@ program
 program
   .command('apply')
   .description('Re-apply configuration changes (re-scan + regenerate prompt)')
-  .action(async () => {
+  .option('--maturity <mode>', 'Maturity mode: auto | full | LOW | MEDIUM | HIGH')
+  .option('--dry-run', 'Preview changes without applying them')
+  .action(async (options) => {
     const { runApply } = await import('./apply.js');
-    await runApply();
+    await runApply(options);
   });
 
 program
@@ -61,9 +65,10 @@ program
 program
   .command('refresh')
   .description('Re-scan .claude/agents/ and regenerate orchestrator prompt')
-  .action(async () => {
+  .option('--maturity <mode>', 'Maturity mode: auto | full | LOW | MEDIUM | HIGH')
+  .action(async (options) => {
     const { runRefresh } = await import('./refresh.js');
-    await runRefresh();
+    await runRefresh(options);
   });
 
 program
@@ -88,6 +93,15 @@ program
   .action(async () => {
     const { runUninstall } = await import('./uninstall.js');
     await runUninstall();
+  });
+
+program
+  .command('doctor')
+  .description('Diagnose OMCSA installation and suggest fixes')
+  .option('--fix', 'Auto-fix fixable issues')
+  .action(async (options) => {
+    const { runDoctor } = await import('./doctor.js');
+    await runDoctor(options);
   });
 
 const omcCmd = program

@@ -55,6 +55,7 @@ function mergeConfig(defaults: OmcsaConfig, user: Partial<OmcsaConfig>): OmcsaCo
       ...defaults.persistence,
       ...user.persistence,
     },
+    maturity: user.maturity ?? defaults.maturity,
   };
 }
 

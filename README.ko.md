@@ -182,11 +182,17 @@ omcsa cancel
 | `omcsa init` | 초기 설정: 에이전트 스캔, 프롬프트 생성, Hook 설치 |
 | `omcsa init --config` | 초기 설정 + `omcsa.config.json` 설정 파일 생성 |
 | `omcsa init --mode <mode>` | 모드 지정 초기화: `standalone`, `omc-only`, `integrated` |
+| `omcsa init --dry-run` | 변경 사항 미리보기 (실제 파일 수정 없음) |
+| `omcsa init --maturity <mode>` | 성숙도 모드 지정: `auto`, `full`, `LOW`, `MEDIUM`, `HIGH` |
 | `omcsa switch <mode>` | 런타임 모드 전환 (재설치 불필요) |
 | `omcsa status` | 현재 설정 상태, OMC 감지 결과, 설치 모드 확인 |
 | `omcsa refresh` | 에이전트 재스캔 및 오케스트레이터 프롬프트 재생성 |
+| `omcsa refresh --maturity <mode>` | 재스캔 + 성숙도 모드 적용 |
 | `omcsa apply` | `omcsa.config.json` 수정 후 재적용 |
+| `omcsa apply --dry-run` | 변경 사항 미리보기 (실제 적용 없음) |
 | `omcsa cancel` | 활성 지속 모드(ralph/ultrawork) 취소 |
+| `omcsa doctor` | OMCSA 설치 진단 및 수정 제안 |
+| `omcsa doctor --fix` | 수정 가능한 문제 자동 수정 |
 | `omcsa omc disable` | OMC 플러그인 전역 비활성화 (`~/.claude/settings.json`에서 제거) |
 | `omcsa omc enable` | OMC 플러그인 재활성화 (백업에서 복원) |
 | `omcsa uninstall` | 프로젝트에서 OMCSA 구성 요소 전체 제거 |
@@ -221,6 +227,9 @@ omcsa init --config
     "ralph": ["ralph", "must complete", "until done"],
     "cancel": ["cancelomcsa", "stopomcsa"]
   },
+  "maturity": {
+    "mode": "full"
+  },
   "persistence": {
     "maxIterations": 10,
     "stateDir": ".omcsa/state"
@@ -229,6 +238,49 @@ omcsa init --config
 ```
 
 수정 후 `omcsa apply`를 실행하면 반영됩니다.
+
+---
+
+## 스마트 프롬프트 (성숙도 기반)
+
+OMCSA는 CLAUDE.md를 분석하여 오케스트레이션 성숙도 수준을 판단하고, 프롬프트 상세 수준을 자동 조절할 수 있습니다.
+
+**기본 동작** (하위 호환): 항상 전체 프롬프트가 생성되며, 성숙도 점수는 로그에 표시됩니다.
+
+```
+Maturity: MEDIUM (0.42) — Full prompt generated (default). Use --maturity auto for adaptive prompts.
+```
+
+**적응형 모드 활성화**: `--maturity auto`를 사용하면 OMCSA가 프롬프트 상세도를 자동 조절합니다:
+
+```bash
+omcsa init --maturity auto    # 분석 후 적응형 프롬프트 생성
+omcsa refresh --maturity auto # 재스캔 시 적응형 프롬프트 적용
+```
+
+**성숙도 레벨:**
+
+| 레벨 | 점수 | 프롬프트 스타일 |
+|------|------|----------------|
+| LOW | < 0.25 | 전체 오케스트레이션 가이드 + 시작 안내 + 사용 예시 |
+| MEDIUM | 0.25 - 0.59 | 에이전트 테이블 + 축약 규칙 + 커버리지 갭 분석 |
+| HIGH | >= 0.60 | 최소 레지스트리 + 모드 키워드만 |
+
+**설정 파일에서 영속화** (`omcsa.config.json`):
+
+```json
+{
+  "maturity": {
+    "mode": "auto"
+  }
+}
+```
+
+유효 모드: `"full"` (기본값), `"auto"`, `"LOW"`, `"MEDIUM"`, `"HIGH"`
+
+CLI 플래그 `--maturity`가 config보다 우선합니다.
+
+---
 
 ### 위임 강제 수준
 
@@ -299,6 +351,20 @@ Standalone 모드에서 OMC가 감지되면, 오케스트레이터 프롬프트�
 Claude가 OMCSA가 관리하는 에이전트만 사용하고 OMC 내장 에이전트(예: `oh-my-claudecode:architect`)를 무시하도록 합니다.
 
 이는 프롬프트 수준의 강제입니다. 더 강한 격리가 필요하면 `omcsa omc disable`로 OMC를 완전히 제거하세요.
+
+### Integrated 모드 오케스트레이션
+
+`integrated` 모드에서 OMCSA는 커스텀 에이전트와 OMC 에이전트를 통합하는 오케스트레이션 프롬프트를 생성합니다:
+
+- **커스텀 에이전트**는 PRIMARY로 표시되어 항상 우선
+- **OMC 에이전트**는 SUPPLEMENTARY로 커스텀이 없는 영역만 담당
+- **커버리지 매트릭스**로 카테고리별 커버리지를 자동 표시
+
+```bash
+omcsa init --mode integrated
+```
+
+라우팅 규칙: 커스텀 > OMC > 직접 처리
 
 ### OMC 플러그인 비활성화
 
@@ -451,6 +517,42 @@ OMCSA는 Claude Code 구독 플랜과 API 키 모두 지원합니다.
 - **모델 티어링**: 에이전트가 `model: opus`를 지정했지만 플랜이 지원하지 않으면 Claude가 자동으로 사용 가능한 모델로 대체
 - **API 키 불필요**: 모든 기능이 CLAUDE.md 프롬프트와 Hook으로 동작
 - **속도 제한**: 구독 사용자는 대량 병렬 실행 시 속도 제한에 걸릴 수 있음. 필요시 동시 실행 수를 줄이세요
+
+---
+
+## 진단 및 미리보기
+
+### Doctor
+
+OMCSA 설치 상태를 진단합니다:
+
+```bash
+omcsa doctor
+```
+
+Hook 파일, 설정 등록, 모드 유효성, 에이전트 파일, CLAUDE.md 섹션 정합성, 성숙도 분석을 검사합니다.
+
+자동 수정 가능한 문제 해결:
+
+```bash
+omcsa doctor --fix
+```
+
+안전 규칙:
+- `mode.json`은 자동 수정하지 않음 (`omcsa switch` 사용)
+- 글로벌 `~/.claude/settings.json`은 절대 수정하지 않음
+- 에이전트 파일: frontmatter 구조만 수정, 내용은 건드리지 않음
+
+### Dry Run (변경 미리보기)
+
+실행 전 변경 사항을 미리 확인합니다:
+
+```bash
+omcsa init --dry-run     # 전체 init 변경 사항 미리보기
+omcsa apply --dry-run    # apply 변경 사항 미리보기
+```
+
+생성/수정될 파일과 OMCSA 섹션 diff를 표시합니다.
 
 ---
 

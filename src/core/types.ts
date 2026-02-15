@@ -59,11 +59,16 @@ export interface PersistenceConfig {
   stateDir?: string;
 }
 
+export interface MaturityConfig {
+  mode?: MaturityMode;
+}
+
 export interface OmcsaConfig {
   agents?: Record<string, AgentConfig>;
   features?: FeaturesConfig;
   keywords?: KeywordsConfig;
   persistence?: PersistenceConfig;
+  maturity?: MaturityConfig;
 }
 
 // ─── Hook Types ──────────────────────────────────────────────────────────────
@@ -102,7 +107,80 @@ export interface PersistentState {
   startedAt: string;
 }
 
+// ─── Maturity Types ─────────────────────────────────────────────────────────
+
+export type MaturityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+export type MaturityMode = 'auto' | 'full' | 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface MaturitySignals {
+  agentNameReferences: number;
+  workflowKeywords: number;
+  taskToolUsage: number;
+  delegationPatterns: number;
+}
+
+export interface MaturityResult {
+  level: MaturityLevel;
+  signals: MaturitySignals;
+  compositeScore: number;
+  details: string[];
+}
+
+// ─── OMC Agent Types ────────────────────────────────────────────────────────
+
+export interface OmcAgent {
+  name: string;
+  fullName: string;
+  description: string;
+  category: AgentCategory;
+}
+
+// ─── Diagnostics Types ──────────────────────────────────────────────────────
+
+export type DiagnosticSeverity = 'ok' | 'warn' | 'error' | 'info';
+
+export interface DiagnosticResult {
+  name: string;
+  severity: DiagnosticSeverity;
+  message: string;
+  fix?: string;
+  fixAction?: () => void;
+}
+
+export interface DoctorReport {
+  results: DiagnosticResult[];
+  maturity?: MaturityResult;
+  suggestions: string[];
+}
+
+// ─── Dry Run Types ──────────────────────────────────────────────────────────
+
+export type ChangeType = 'create' | 'modify' | 'delete';
+
+export interface FileChange {
+  path: string;
+  changeType: ChangeType;
+  description: string;
+  before?: string;
+  after?: string;
+}
+
+export interface DryRunReport {
+  changes: FileChange[];
+  mode: InstallMode;
+  agentCount: number;
+  omcDetected: boolean;
+}
+
 // ─── Prompt Generation Types ─────────────────────────────────────────────────
+
+export interface PromptOptions {
+  config?: OmcsaConfig;
+  omcDetected?: boolean;
+  maturityLevel?: MaturityLevel;
+  mode?: InstallMode;
+  omcAgents?: OmcAgent[];
+}
 
 export interface PromptGenerationOptions {
   agents: DiscoveredAgent[];

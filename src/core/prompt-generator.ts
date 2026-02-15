@@ -3,15 +3,23 @@
  *
  * Generates the orchestrator prompt section that gets injected into CLAUDE.md.
  * This prompt instructs Claude Code to delegate tasks to specialized sub-agents.
+ *
+ * Supports maturity-level-dependent prompt generation and integrated mode
+ * orchestration with OMC agents.
  */
 
 import {
   DiscoveredAgent,
   OmcsaConfig,
+  OmcAgent,
+  AgentCategory,
   OMCSA_MARKER_START,
   OMCSA_MARKER_END,
   DEFAULT_CONFIG,
 } from './types.js';
+import type { MaturityLevel, PromptOptions } from './types.js';
+
+// ─── Helper Functions ───────────────────────────────────────────────────────
 
 /**
  * Group agents by category for combination suggestions.
@@ -160,43 +168,302 @@ If a task requires capabilities not covered by the available agents listed above
 handle it directly rather than delegating to OMC agents.`;
 }
 
-/**
- * Generate the complete orchestrator prompt.
- */
-export function generateOrchestratorPrompt(
-  agents: DiscoveredAgent[],
-  config?: OmcsaConfig,
-  omcDetected?: boolean,
-): string {
-  const mergedConfig = { ...DEFAULT_CONFIG, ...config };
-  const features = mergedConfig.features || DEFAULT_CONFIG.features!;
+// ─── Maturity-Dependent Sections ────────────────────────────────────────────
 
-  // Build the agent table
-  const tableHeader = '| Agent | Model | Category | Scope | Description |';
-  const tableSep =    '|-------|-------|----------|-------|-------------|';
+/**
+ * Generate getting started section for LOW maturity users.
+ */
+function generateGettingStartedSection(agents: DiscoveredAgent[]): string {
+  const lines = [
+    '### Getting Started with Agent Orchestration',
+    '',
+    'As an orchestrator, you coordinate specialized agents rather than doing work directly.',
+    'Here\'s how to effectively delegate:',
+    '',
+    '**Basic delegation example:**',
+    '```',
+    'User: "Add a login form with validation"',
+    '',
+    'Orchestrator approach:',
+    '1. Identify the right agent (e.g., an implementation agent)',
+    '2. Use the Task tool to delegate:',
+    '   Task({ subagent_type: "<agent-name>", prompt: "Build a login form with..." })',
+    '3. Review the result and run tests if available',
+    '```',
+    '',
+    '**Key principles:**',
+    '- Always use the Task tool to delegate work to agents',
+    '- Set the `model` parameter to match the agent\'s tier (haiku/sonnet/opus)',
+    '- For independent tasks, launch agents in parallel with `run_in_background: true`',
+    '- Verify each agent\'s output before considering the task complete',
+  ];
+
+  if (agents.length > 1) {
+    lines.push('', '**Multi-agent workflow:**');
+    lines.push('- Break complex requests into sub-tasks');
+    lines.push('- Assign each sub-task to the most appropriate agent');
+    lines.push('- Coordinate results and handle any conflicts');
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Generate gap analysis for MEDIUM maturity users.
+ */
+function generateGapAnalysis(agents: DiscoveredAgent[]): string {
+  const groups = groupByCategory(agents);
+  const gaps: string[] = [];
+
+  if (!groups['testing'] || groups['testing'].length === 0) {
+    gaps.push('- **Testing**: No testing agent found. Consider adding one for automated quality checks.');
+  }
+  if (!groups['review'] || groups['review'].length === 0) {
+    gaps.push('- **Review**: No review agent found. Consider adding one for code review workflows.');
+  }
+  if (!groups['exploration'] || groups['exploration'].length === 0) {
+    gaps.push('- **Exploration**: No exploration agent found. Consider adding one for codebase analysis.');
+  }
+
+  if (gaps.length === 0) return '';
+
+  return `### Coverage Gaps\n\nYour agent setup could be improved in these areas:\n${gaps.join('\n')}`;
+}
+
+/**
+ * Generate minimal registry for HIGH maturity users.
+ */
+function generateMinimalRegistry(agents: DiscoveredAgent[]): string {
+  const tableHeader = '| Agent | Model | Cat | Description |';
+  const tableSep =    '|-------|-------|-----|-------------|';
   const tableRows = agents.map(a =>
-    `| ${a.name} | ${a.model || 'default'} | ${a.category} | ${a.scope} | ${a.description} |`
+    `| ${a.name} | ${a.model || '-'} | ${a.category.slice(0, 4)} | ${a.description} |`
+  );
+
+  return [tableHeader, tableSep, ...tableRows].join('\n');
+}
+
+// ─── Integrated Mode ────────────────────────────────────────────────────────
+
+/**
+ * Generate integrated mode prompt with custom (PRIMARY) and OMC (SUPPLEMENTARY) agents.
+ */
+function generateIntegratedSection(
+  agents: DiscoveredAgent[],
+  omcAgents: OmcAgent[],
+  maturityLevel: MaturityLevel,
+): string {
+  const customCategories = new Set<AgentCategory>(agents.map(a => a.category));
+  const omcCategories = new Set<AgentCategory>(omcAgents.map(a => a.category));
+
+  // Custom agents table
+  const customHeader = '| Agent | Model | Category | Description |';
+  const customSep =    '|-------|-------|----------|-------------|';
+  const customRows = agents.map(a =>
+    `| ${a.name} | ${a.model || 'default'} | ${a.category} | ${a.description} |`
+  );
+
+  // Supplementary OMC agents (only categories not covered by custom)
+  const supplementary = omcAgents.filter(omc => !customCategories.has(omc.category));
+
+  const omcHeader = '| Agent | Category | Description |';
+  const omcSep =    '|-------|----------|-------------|';
+  const omcRows = supplementary.map(a =>
+    `| ${a.fullName} | ${a.category} | ${a.description} |`
   );
 
   const sections: string[] = [
-    OMCSA_MARKER_START,
-    '## Agent Orchestration',
+    '### Custom Agents (PRIMARY - always preferred)',
     '',
-    'You are an orchestrator. Delegate tasks to specialized sub-agents instead of doing work directly.',
-    '',
-    '### Available Agents',
-    '',
-    tableHeader,
-    tableSep,
-    ...tableRows,
-    '',
-    '### Orchestration Rules',
-    '1. **Delegate**: Use Task tool to delegate to the appropriate agent',
-    '2. **Parallelize**: Launch independent tasks simultaneously',
-    '3. **Verify**: Always verify completion with build/test evidence',
-    '4. **Continue**: Do not stop until ALL tasks are completed',
-    '',
-    `### Workflow & Convention Integration
+    customHeader,
+    customSep,
+    ...customRows,
+  ];
+
+  if (omcRows.length > 0) {
+    sections.push(
+      '',
+      '### OMC Agents (SUPPLEMENTARY - uncovered areas only)',
+      '',
+      omcHeader,
+      omcSep,
+      ...omcRows,
+    );
+  }
+
+  // Routing rules
+  if (maturityLevel === 'LOW') {
+    sections.push(
+      '',
+      '### Routing Rules',
+      '1. **Custom agents always take priority** — if a custom agent covers the task category, use it',
+      '2. **OMC agents fill gaps** — only use OMC agents for categories not covered by custom agents',
+      '3. **User CLAUDE.md rules are supreme** — any workflow rules in this document override these defaults',
+      '',
+      '**Example:** If you have a custom implementation agent AND OMC has oh-my-claudecode:executor,',
+      'always use your custom implementation agent. Only use OMC agents for categories like testing',
+      'or review if you don\'t have custom agents for those.',
+    );
+  } else {
+    sections.push(
+      '',
+      '### Routing: Custom > OMC > Direct. User workflow rules override all.',
+    );
+  }
+
+  // Coverage matrix
+  const allCats: AgentCategory[] = ['implementation', 'review', 'testing', 'exploration'];
+  const coveredCats = allCats.filter(cat => customCategories.has(cat) || omcCategories.has(cat));
+  if (coveredCats.length > 0) {
+    sections.push(
+      '',
+      '### Coverage Matrix',
+      '| Category | Custom | OMC |',
+      '|----------|--------|-----|',
+      ...coveredCats.map(cat =>
+        `| ${cat} | ${customCategories.has(cat) ? '✓' : '-'} | ${omcCategories.has(cat) ? '✓' : '-'} |`
+      ),
+    );
+  }
+
+  return sections.join('\n');
+}
+
+// ─── Main Prompt Generation ─────────────────────────────────────────────────
+
+/**
+ * Generate the complete orchestrator prompt.
+ *
+ * @param agents - Discovered custom agents
+ * @param options - Prompt generation options (config, maturity, mode, OMC agents)
+ */
+export function generateOrchestratorPrompt(
+  agents: DiscoveredAgent[],
+  options?: PromptOptions,
+): string {
+  const config = options?.config;
+  const omcDetected = options?.omcDetected ?? false;
+  const maturityLevel = options?.maturityLevel ?? 'LOW';
+  const mode = options?.mode;
+  const omcAgents = options?.omcAgents;
+
+  const mergedConfig = { ...DEFAULT_CONFIG, ...config };
+  const features = mergedConfig.features || DEFAULT_CONFIG.features!;
+
+  // For integrated mode with OMC agents, generate specialized prompt
+  const isIntegrated = mode === 'integrated' && omcAgents && omcAgents.length > 0;
+
+  const sections: string[] = [OMCSA_MARKER_START];
+
+  if (maturityLevel === 'HIGH') {
+    // HIGH maturity: minimal registry + mode keywords only
+    sections.push(
+      '## Agent Orchestration',
+      '',
+      generateMinimalRegistry(agents),
+    );
+
+    if (isIntegrated) {
+      sections.push('', generateIntegratedSection(agents, omcAgents!, maturityLevel));
+    }
+
+    // Only keywords for modes
+    const modeKeywords: string[] = [];
+    if (features.ultrawork) modeKeywords.push('ultrawork/ulw');
+    if (features.ralph) modeKeywords.push('ralph/must-complete');
+    if (modeKeywords.length > 0) {
+      sections.push('', `Modes: ${modeKeywords.join(', ')}`);
+    }
+
+    if (omcDetected && mode !== 'integrated') {
+      sections.push('', 'Agents: custom only (no OMC)');
+    }
+  } else if (maturityLevel === 'MEDIUM') {
+    // MEDIUM maturity: agent table + condensed rules + gap analysis
+    const tableHeader = '| Agent | Model | Category | Scope | Description |';
+    const tableSep =    '|-------|-------|----------|-------|-------------|';
+    const tableRows = agents.map(a =>
+      `| ${a.name} | ${a.model || 'default'} | ${a.category} | ${a.scope} | ${a.description} |`
+    );
+
+    sections.push(
+      '## Agent Orchestration',
+      '',
+      '### Available Agents',
+      '',
+      tableHeader,
+      tableSep,
+      ...tableRows,
+      '',
+      '### Rules',
+      '- Delegate via Task tool, parallelize independent tasks, verify with evidence',
+      '- Follow all project conventions and workflow rules defined in this document',
+    );
+
+    if (isIntegrated) {
+      sections.push('', generateIntegratedSection(agents, omcAgents!, maturityLevel));
+    }
+
+    // Condensed combinations
+    const combinations = generateCombinations(agents);
+    if (combinations) {
+      sections.push('', combinations);
+    }
+
+    // Model tiers (condensed)
+    if (features.modelTiering) {
+      sections.push('', generateModelTiers(agents));
+    }
+
+    // Ultrawork/Ralph (condensed)
+    if (features.ultrawork) {
+      sections.push('', '### Ultrawork Mode', 'Prefix with "ultrawork:" for parallel agent dispatch.');
+    }
+    if (features.ralph) {
+      sections.push('', '### Ralph Mode', 'Prefix with "ralph:" for persistent loop until completion.');
+    }
+
+    // Delegation
+    const delegationLevel = features.delegationEnforcement || 'warn';
+    if (delegationLevel !== 'off') {
+      sections.push('', generateDelegationSection(delegationLevel));
+    }
+
+    if (omcDetected && mode !== 'integrated') {
+      sections.push('', generateAgentExclusivitySection());
+    }
+
+    // Gap analysis
+    const gapAnalysis = generateGapAnalysis(agents);
+    if (gapAnalysis) {
+      sections.push('', gapAnalysis);
+    }
+  } else {
+    // LOW maturity: full detailed prompt (v0.1.0 compatible)
+    const tableHeader = '| Agent | Model | Category | Scope | Description |';
+    const tableSep =    '|-------|-------|----------|-------|-------------|';
+    const tableRows = agents.map(a =>
+      `| ${a.name} | ${a.model || 'default'} | ${a.category} | ${a.scope} | ${a.description} |`
+    );
+
+    sections.push(
+      '## Agent Orchestration',
+      '',
+      'You are an orchestrator. Delegate tasks to specialized sub-agents instead of doing work directly.',
+      '',
+      '### Available Agents',
+      '',
+      tableHeader,
+      tableSep,
+      ...tableRows,
+      '',
+      '### Orchestration Rules',
+      '1. **Delegate**: Use Task tool to delegate to the appropriate agent',
+      '2. **Parallelize**: Launch independent tasks simultaneously',
+      '3. **Verify**: Always verify completion with build/test evidence',
+      '4. **Continue**: Do not stop until ALL tasks are completed',
+      '',
+      `### Workflow & Convention Integration
 **IMPORTANT**: This project has custom rules, workflows, and conventions defined in this document
 (and any files referenced via @imports). You MUST follow ALL of them, including:
 - **Code conventions**: Naming, style, patterns, and architecture rules
@@ -208,44 +475,54 @@ export function generateOrchestratorPrompt(
 When delegating to sub-agents, include relevant convention context in the Task prompt.
 When an agent completes work, check if workflow rules specify follow-up actions
 and execute them before considering the task complete.`,
-  ];
+    );
 
-  // Agent combinations
-  const combinations = generateCombinations(agents);
-  if (combinations) {
-    sections.push('', combinations);
-  }
+    if (isIntegrated) {
+      sections.push('', generateIntegratedSection(agents, omcAgents!, maturityLevel));
+    }
 
-  // Model tiers
-  if (features.modelTiering) {
-    sections.push('', generateModelTiers(agents));
-  }
+    // Agent combinations
+    const combinations = generateCombinations(agents);
+    if (combinations) {
+      sections.push('', combinations);
+    }
 
-  // Ultrawork mode
-  if (features.ultrawork) {
-    sections.push('', generateUltraworkSection(agents));
-  }
+    // Model tiers
+    if (features.modelTiering) {
+      sections.push('', generateModelTiers(agents));
+    }
 
-  // Ralph mode
-  if (features.ralph) {
-    sections.push('', generateRalphSection());
-  }
+    // Ultrawork mode
+    if (features.ultrawork) {
+      sections.push('', generateUltraworkSection(agents));
+    }
 
-  // Delegation enforcement
-  const delegationLevel = features.delegationEnforcement || 'warn';
-  if (delegationLevel !== 'off') {
-    sections.push('', generateDelegationSection(delegationLevel));
-  }
+    // Ralph mode
+    if (features.ralph) {
+      sections.push('', generateRalphSection());
+    }
 
-  // Agent Exclusivity (standalone mode with OMC detected)
-  if (omcDetected) {
-    sections.push('', generateAgentExclusivitySection());
+    // Delegation enforcement
+    const delegationLevel = features.delegationEnforcement || 'warn';
+    if (delegationLevel !== 'off') {
+      sections.push('', generateDelegationSection(delegationLevel));
+    }
+
+    // Agent Exclusivity (standalone mode with OMC detected)
+    if (omcDetected && mode !== 'integrated') {
+      sections.push('', generateAgentExclusivitySection());
+    }
+
+    // Getting started guide
+    sections.push('', generateGettingStartedSection(agents));
   }
 
   sections.push(OMCSA_MARKER_END);
 
   return sections.join('\n');
 }
+
+// ─── CLAUDE.md Operations ───────────────────────────────────────────────────
 
 /**
  * Update CLAUDE.md content with the OMCSA orchestrator section.

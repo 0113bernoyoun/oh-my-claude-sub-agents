@@ -7,16 +7,32 @@
 
 import chalk from 'chalk';
 import { existsSync, readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { scanAgents } from '../core/scanner.js';
 import { loadConfig } from '../core/config-loader.js';
 import { OMCSA_MARKER_START } from '../core/types.js';
 import { detectOmc, loadMode } from '../core/omc-detector.js';
+import { analyzeMaturity } from '../core/maturity-analyzer.js';
+import { removeOmcsaSection } from '../core/prompt-generator.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+function getVersion(): string {
+  try {
+    const pkgPath = join(__dirname, '..', '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
 
 export async function runStatus(): Promise<void> {
   const projectRoot = process.cwd();
 
-  console.log(chalk.cyan('\n  OMCSA Status\n'));
+  console.log(chalk.cyan(`\n  OMCSA Status`) + chalk.dim(` (v${getVersion()})`) + '\n');
 
   const hooksDir = join(projectRoot, '.claude', 'hooks');
 
@@ -90,10 +106,10 @@ export async function runStatus(): Promise<void> {
     console.log(chalk.yellow('  Hooks: directory not found'));
   }
 
-  // Check config
+  // Check config (load once, reuse below for maturity)
+  const config = loadConfig(projectRoot);
   const configPath = join(projectRoot, '.claude', 'omcsa.config.json');
   if (existsSync(configPath)) {
-    const config = loadConfig(projectRoot);
     console.log(chalk.green('  Config: omcsa.config.json found'));
     console.log(`    - ultrawork: ${config.features?.ultrawork ? 'enabled' : 'disabled'}`);
     console.log(`    - ralph: ${config.features?.ralph ? 'enabled' : 'disabled'}`);
@@ -138,6 +154,19 @@ export async function runStatus(): Promise<void> {
     }
   } else {
     console.log(chalk.yellow('  Settings: settings.json not found'));
+  }
+
+  // Maturity analysis
+  if (existsSync(claudeMdPath) && agents.length > 0) {
+    const content = readFileSync(claudeMdPath, 'utf-8');
+    const cleanedContent = removeOmcsaSection(content);
+    const maturity = analyzeMaturity(cleanedContent, agents);
+    console.log(chalk.cyan(`  Maturity: ${chalk.bold(maturity.level)} (score: ${maturity.compositeScore.toFixed(2)})`));
+  }
+
+  // Maturity config
+  if (config.maturity?.mode) {
+    console.log(chalk.dim(`  Maturity mode: ${config.maturity.mode}`));
   }
 
   console.log();

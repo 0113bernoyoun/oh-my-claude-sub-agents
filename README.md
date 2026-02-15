@@ -184,10 +184,17 @@ omcsa cancel
 | `omcsa init` | Initial setup: scan agents, generate prompt, install hooks |
 | `omcsa init --config` | Same as init but also generates `omcsa.config.json` for fine-tuning |
 | `omcsa init --mode <mode>` | Init with explicit mode: `standalone`, `omc-only`, or `integrated` |
+| `omcsa init --dry-run` | Preview init changes without applying them |
+| `omcsa init --maturity <mode>` | Set maturity mode: `full`, `auto`, `LOW`, `MEDIUM`, or `HIGH` |
 | `omcsa switch <mode>` | Switch install mode at runtime (no reinstall needed) |
 | `omcsa status` | Show current configuration, OMC detection, and install mode |
 | `omcsa refresh` | Re-scan agents and regenerate orchestrator prompt |
+| `omcsa refresh --maturity <mode>` | Re-scan with specified maturity mode |
 | `omcsa apply` | Re-apply config changes after editing `omcsa.config.json` |
+| `omcsa apply --dry-run` | Preview apply changes without modifying files |
+| `omcsa apply --maturity <mode>` | Apply with specified maturity mode |
+| `omcsa doctor` | Diagnose OMCSA installation and suggest fixes |
+| `omcsa doctor --fix` | Auto-fix fixable issues |
 | `omcsa cancel` | Cancel any active persistent mode (ralph/ultrawork) |
 | `omcsa omc disable` | Disable OMC plugin globally (removes from `~/.claude/settings.json`) |
 | `omcsa omc enable` | Re-enable OMC plugin (restore from backup) |
@@ -226,11 +233,53 @@ This creates `.claude/omcsa.config.json`:
   "persistence": {
     "maxIterations": 10,
     "stateDir": ".omcsa/state"
+  },
+  "maturity": {
+    "mode": "full"
   }
 }
 ```
 
 After editing, run `omcsa apply` to regenerate.
+
+### Smart Prompt (Maturity-Based)
+
+OMCSA analyzes your CLAUDE.md to determine your orchestration maturity level and can adjust the prompt detail accordingly.
+
+**Default behavior** (backward compatible): Full prompt is always generated, with maturity score shown in the log output.
+
+```
+Maturity: MEDIUM (0.42) — Full prompt generated (default). Use --maturity auto for adaptive prompts.
+```
+
+**Opt-in adaptive mode**: Use `--maturity auto` to let OMCSA adjust prompt verbosity:
+
+```bash
+omcsa init --maturity auto    # Analyze and adapt
+omcsa refresh --maturity auto # Re-scan with adaptive prompt
+```
+
+**Maturity levels:**
+
+| Level | Score | Prompt Style |
+|-------|-------|-------------|
+| LOW | < 0.25 | Full orchestration guide with examples and getting-started section |
+| MEDIUM | 0.25 - 0.59 | Agent table + condensed rules + coverage gap analysis |
+| HIGH | >= 0.60 | Minimal registry + mode keywords only |
+
+**Persisting the setting** in `omcsa.config.json`:
+
+```json
+{
+  "maturity": {
+    "mode": "auto"
+  }
+}
+```
+
+Valid modes: `"full"` (default), `"auto"`, `"LOW"`, `"MEDIUM"`, `"HIGH"`
+
+CLI flag `--maturity` overrides config.
 
 ### Delegation Enforcement Levels
 
@@ -301,6 +350,20 @@ When OMCSA detects OMC in standalone mode, the orchestrator prompt includes an *
 that instructs Claude to ONLY use OMCSA-managed agents and ignore OMC's built-in agents (e.g. `oh-my-claudecode:architect`).
 
 This is a prompt-level enforcement. For stronger isolation, use `omcsa omc disable` to remove OMC entirely.
+
+### Integrated Mode Orchestration
+
+In `integrated` mode, OMCSA creates a unified orchestration prompt with both custom and OMC agents:
+
+- **Custom agents** are marked as PRIMARY and always take priority
+- **OMC agents** are SUPPLEMENTARY and only used for categories not covered by custom agents
+- A **Coverage Matrix** shows which categories are handled by which system
+
+```bash
+omcsa init --mode integrated
+```
+
+The prompt includes routing rules: Custom > OMC > Direct handling.
 
 ### Disabling OMC Plugin
 
@@ -453,6 +516,42 @@ OMCSA works with both Claude Code subscription plans and API keys.
 - **Model tiering**: If an agent specifies `model: opus` but your plan doesn't support it, Claude automatically falls back to the next available model
 - **No API key required**: All features work through CLAUDE.md prompts and hooks
 - **Rate limits**: Subscription users may hit rate limits with heavy parallel execution. Reduce concurrency if needed
+
+---
+
+## Diagnostics & Preview
+
+### Doctor
+
+Check your OMCSA installation health:
+
+```bash
+omcsa doctor
+```
+
+Output includes hook file checks, settings registration, mode validation, agent file validation, CLAUDE.md section integrity, and maturity analysis.
+
+Auto-fix supported issues:
+
+```bash
+omcsa doctor --fix
+```
+
+Safety rules:
+- `mode.json` is never auto-fixed (use `omcsa switch` instead)
+- Global `~/.claude/settings.json` is never modified
+- Agent files: only frontmatter structure is fixed, not content
+
+### Dry Run
+
+Preview changes before applying:
+
+```bash
+omcsa init --dry-run     # Preview full init
+omcsa apply --dry-run    # Preview apply changes
+```
+
+Shows which files would be created/modified and OMCSA section diff.
 
 ---
 

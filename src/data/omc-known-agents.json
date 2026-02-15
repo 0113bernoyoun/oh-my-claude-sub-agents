@@ -1,0 +1,102 @@
+{
+  "omcVersion": "0.1.x",
+  "lastUpdated": "2026-02-15",
+  "agents": [
+    {
+      "name": "code-reviewer",
+      "fullName": "oh-my-claudecode:code-reviewer",
+      "description": "Expert code review specialist",
+      "category": "review"
+    },
+    {
+      "name": "scientist",
+      "fullName": "oh-my-claudecode:scientist",
+      "description": "Data analysis and research execution specialist",
+      "category": "exploration"
+    },
+    {
+      "name": "qa-tester",
+      "fullName": "oh-my-claudecode:qa-tester",
+      "description": "Interactive CLI testing specialist using tmux",
+      "category": "testing"
+    },
+    {
+      "name": "writer",
+      "fullName": "oh-my-claudecode:writer",
+      "description": "Technical documentation writer",
+      "category": "implementation"
+    },
+    {
+      "name": "explore",
+      "fullName": "oh-my-claudecode:explore",
+      "description": "Fast codebase search specialist",
+      "category": "exploration"
+    },
+    {
+      "name": "build-fixer",
+      "fullName": "oh-my-claudecode:build-fixer",
+      "description": "Build and TypeScript error resolution specialist",
+      "category": "implementation"
+    },
+    {
+      "name": "security-reviewer",
+      "fullName": "oh-my-claudecode:security-reviewer",
+      "description": "Security vulnerability detection specialist",
+      "category": "review"
+    },
+    {
+      "name": "researcher",
+      "fullName": "oh-my-claudecode:researcher",
+      "description": "External documentation and reference researcher",
+      "category": "exploration"
+    },
+    {
+      "name": "architect",
+      "fullName": "oh-my-claudecode:architect",
+      "description": "Strategic architecture and debugging advisor",
+      "category": "exploration"
+    },
+    {
+      "name": "designer",
+      "fullName": "oh-my-claudecode:designer",
+      "description": "UI/UX designer-developer for interfaces",
+      "category": "implementation"
+    },
+    {
+      "name": "executor",
+      "fullName": "oh-my-claudecode:executor",
+      "description": "Focused task executor for implementation work",
+      "category": "implementation"
+    },
+    {
+      "name": "planner",
+      "fullName": "oh-my-claudecode:planner",
+      "description": "Strategic planning consultant with interview workflow",
+      "category": "exploration"
+    },
+    {
+      "name": "tdd-guide",
+      "fullName": "oh-my-claudecode:tdd-guide",
+      "description": "Test-Driven Development specialist",
+      "category": "testing"
+    },
+    {
+      "name": "critic",
+      "fullName": "oh-my-claudecode:critic",
+      "description": "Work plan review expert and critic",
+      "category": "review"
+    },
+    {
+      "name": "vision",
+      "fullName": "oh-my-claudecode:vision",
+      "description": "Visual/media file analyzer",
+      "category": "exploration"
+    },
+    {
+      "name": "analyst",
+      "fullName": "oh-my-claudecode:analyst",
+      "description": "Pre-planning consultant for requirements analysis",
+      "category": "exploration"
+    }
+  ]
+}
