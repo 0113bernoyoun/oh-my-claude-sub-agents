@@ -6,7 +6,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
-import { PersistentState } from '../core/types.js';
+import { PersistentState, WorkflowState } from '../core/types.js';
 
 /**
  * Get the state directory path.
@@ -73,6 +73,47 @@ export function clearState(projectRoot: string, mode: string, stateDir?: string)
 export function clearAllState(projectRoot: string, stateDir?: string): void {
   clearState(projectRoot, 'ralph', stateDir);
   clearState(projectRoot, 'ultrawork', stateDir);
+  clearWorkflowState(projectRoot, stateDir);
+}
+
+/**
+ * Read workflow state.
+ */
+export function readWorkflowState(projectRoot: string, stateDir?: string): WorkflowState | null {
+  const dir = getStateDir(projectRoot, stateDir);
+  const statePath = join(dir, 'workflow-state.json');
+  if (!existsSync(statePath)) return null;
+  try {
+    return JSON.parse(readFileSync(statePath, 'utf-8')) as WorkflowState;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write workflow state.
+ */
+export function writeWorkflowState(projectRoot: string, state: WorkflowState, stateDir?: string): void {
+  const dir = getStateDir(projectRoot, stateDir);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(join(dir, 'workflow-state.json'), JSON.stringify(state, null, 2) + '\n', 'utf-8');
+}
+
+/**
+ * Clear workflow state.
+ */
+export function clearWorkflowState(projectRoot: string, stateDir?: string): void {
+  const dir = getStateDir(projectRoot, stateDir);
+  const statePath = join(dir, 'workflow-state.json');
+  if (existsSync(statePath)) {
+    try {
+      unlinkSync(statePath);
+    } catch {
+      // Ignore
+    }
+  }
 }
 
 /**

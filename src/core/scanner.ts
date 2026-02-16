@@ -135,9 +135,32 @@ function validateModel(value: unknown): ModelName | undefined {
   return undefined;
 }
 
+const CATEGORY_SYNONYMS: Record<string, AgentCategory> = {
+  // implementation synonyms
+  engineering: 'implementation',
+  development: 'implementation',
+  dev: 'implementation',
+  coding: 'implementation',
+  builder: 'implementation',
+  // review synonyms
+  quality: 'review',
+  audit: 'review',
+  verification: 'review',
+  // testing synonyms
+  qa: 'testing',
+  test: 'testing',
+  spec: 'testing',
+  // exploration synonyms
+  analysis: 'exploration',
+  research: 'exploration',
+  investigation: 'exploration',
+};
+
 function validateCategory(value: string): AgentCategory {
+  const lower = value.toLowerCase();
   const categories: AgentCategory[] = ['implementation', 'review', 'testing', 'exploration', 'other'];
-  return categories.includes(value as AgentCategory) ? value as AgentCategory : 'other';
+  if (categories.includes(lower as AgentCategory)) return lower as AgentCategory;
+  return CATEGORY_SYNONYMS[lower] || 'other';
 }
 
 /**

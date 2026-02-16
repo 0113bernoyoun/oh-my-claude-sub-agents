@@ -30,7 +30,8 @@ export async function runCancel(): Promise<void> {
         const filePath = join(stateDir, file);
         const mode = file.replace('-state.json', '');
         unlinkSync(filePath);
-        console.log(chalk.green(`  ✓ Cancelled ${mode} mode`));
+        const label = mode === 'workflow' ? 'active workflow' : `${mode} mode`;
+        console.log(chalk.green(`  \u2713 Cancelled ${label}`));
         cancelled++;
       }
     }

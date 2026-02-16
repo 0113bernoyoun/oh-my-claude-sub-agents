@@ -17,7 +17,7 @@ import {
   OMCSA_MARKER_END,
   DEFAULT_CONFIG,
 } from './types.js';
-import type { MaturityLevel, PromptOptions } from './types.js';
+import type { MaturityLevel, PromptOptions, WorkflowsConfig } from './types.js';
 
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
@@ -166,6 +166,53 @@ oh-my-claudecode:explore, oh-my-claudecode:executor, or any other oh-my-claudeco
 OMCSA manages your agent orchestration exclusively in this project.
 If a task requires capabilities not covered by the available agents listed above,
 handle it directly rather than delegating to OMC agents.`;
+}
+
+/**
+ * Generate the workflow pipelines prompt section.
+ */
+function generateWorkflowSection(
+  workflows: WorkflowsConfig,
+  maturityLevel: MaturityLevel,
+): string {
+  const entries = Object.entries(workflows);
+  if (entries.length === 0) return '';
+
+  if (maturityLevel === 'HIGH') {
+    const lines = entries.map(([name, wf]) => `${name}(${wf.steps.join('->')})`);
+    return `Workflows: ${lines.join(', ')}`;
+  }
+
+  if (maturityLevel === 'MEDIUM') {
+    const lines = ['### Workflow Pipelines'];
+    for (const [name, wf] of entries) {
+      lines.push(`- **${name}**: ${wf.steps.join(' \u2192 ')}`);
+    }
+    lines.push('Follow pipeline order strictly. PostToolUse hook tracks progress.');
+    return lines.join('\n');
+  }
+
+  // LOW: full explanation
+  const lines = [
+    '### Workflow Pipelines',
+    '',
+    'When the first agent in a workflow is called, the pipeline auto-activates.',
+    'After each step completes, a system message tells you the next agent to route to.',
+    'Follow the pipeline order strictly.',
+    '',
+  ];
+  for (const [name, wf] of entries) {
+    lines.push(`**${name}** (${wf.mode}):`);
+    wf.steps.forEach((step, i) => {
+      lines.push(`  ${i + 1}. ${step}`);
+    });
+    lines.push('');
+  }
+  lines.push('Rules:');
+  lines.push('- Do NOT skip steps or reorder the pipeline');
+  lines.push('- After each agent completes, route to the next agent immediately');
+  lines.push('- User-defined workflow rules in CLAUDE.md take precedence over these pipelines');
+  return lines.join('\n');
 }
 
 // ─── Maturity-Dependent Sections ────────────────────────────────────────────
@@ -378,6 +425,12 @@ export function generateOrchestratorPrompt(
     if (omcDetected && mode !== 'integrated') {
       sections.push('', 'Agents: custom only (no OMC)');
     }
+
+    // Workflow pipelines (HIGH)
+    if (mergedConfig.workflows) {
+      const wfSection = generateWorkflowSection(mergedConfig.workflows, maturityLevel);
+      if (wfSection) sections.push('', wfSection);
+    }
   } else if (maturityLevel === 'MEDIUM') {
     // MEDIUM maturity: agent table + condensed rules + gap analysis
     const tableHeader = '| Agent | Model | Category | Scope | Description |';
@@ -437,6 +490,12 @@ export function generateOrchestratorPrompt(
     const gapAnalysis = generateGapAnalysis(agents);
     if (gapAnalysis) {
       sections.push('', gapAnalysis);
+    }
+
+    // Workflow pipelines (MEDIUM)
+    if (mergedConfig.workflows) {
+      const wfSection = generateWorkflowSection(mergedConfig.workflows, maturityLevel);
+      if (wfSection) sections.push('', wfSection);
     }
   } else {
     // LOW maturity: full detailed prompt (v0.1.0 compatible)
@@ -515,6 +574,12 @@ and execute them before considering the task complete.`,
 
     // Getting started guide
     sections.push('', generateGettingStartedSection(agents));
+
+    // Workflow pipelines (LOW)
+    if (mergedConfig.workflows) {
+      const wfSection = generateWorkflowSection(mergedConfig.workflows, maturityLevel);
+      if (wfSection) sections.push('', wfSection);
+    }
   }
 
   sections.push(OMCSA_MARKER_END);

@@ -192,7 +192,11 @@ omcsa cancel
 | `omcsa refresh --maturity <mode>` | 재스캔 + 성숙도 모드 적용 |
 | `omcsa apply` | `omcsa.config.json` 수정 후 재적용 |
 | `omcsa apply --dry-run` | 변경 사항 미리보기 (실제 적용 없음) |
-| `omcsa cancel` | 활성 지속 모드(ralph/ultrawork) 취소 |
+| `omcsa workflow` | 설정된 워크플로우 목록 표시 |
+| `omcsa workflow add all` | 에이전트 카테고리 기반 워크플로우 자동 생성 |
+| `omcsa workflow add <agents...>` | 커스텀 워크플로우 추가 (이름 자동 생성) |
+| `omcsa workflow rm <name>` | 워크플로우 삭제 |
+| `omcsa cancel` | 활성 지속 모드(ralph/ultrawork/workflow) 취소 |
 | `omcsa doctor` | OMCSA 설치 진단 및 수정 제안 |
 | `omcsa doctor --fix` | 수정 가능한 문제 자동 수정 |
 | `omcsa omc disable` | OMC 플러그인 전역 비활성화 (`~/.claude/settings.json`에서 제거) |
@@ -512,6 +516,26 @@ model: haiku
 
 당신은 테스트 작성자입니다. 주어진 코드에 대한 포괄적인 테스트를 작성하세요.
 ```
+
+### 워크플로우 파이프라인
+
+OMCSA는 에이전트 카테고리를 기반으로 워크플로우를 자동 제안합니다:
+
+```bash
+omcsa init
+# 워크플로우 파이프라인:
+#     default: backend-dev -> code-reviewer -> test-writer
+
+omcsa workflow add all            # 제안된 워크플로우 모두 활성화
+omcsa workflow add my-flow a b c  # 커스텀 워크플로우 추가
+omcsa workflow rm my-flow         # 워크플로우 삭제
+```
+
+워크플로우의 첫 번째 에이전트가 호출되면 OMCSA가 자동으로 파이프라인 추적을 시작합니다.
+각 단계 완료 후 시스템 메시지가 Claude에게 다음 에이전트를 안내합니다.
+
+진행 상태 확인: `omcsa status`
+취소: `omcsa cancel`
 
 ---
 

@@ -3,3 +3,4 @@ dist/
 .omcsa/
 *.tsbuildinfo
 .DS_Store
+templates/

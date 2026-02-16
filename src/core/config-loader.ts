@@ -14,6 +14,7 @@ import {
   AgentConfig,
   ModelTier,
 } from './types.js';
+import { generateSuggestedWorkflows } from './workflow-generator.js';
 
 const CONFIG_FILENAME = 'omcsa.config.json';
 
@@ -56,6 +57,7 @@ function mergeConfig(defaults: OmcsaConfig, user: Partial<OmcsaConfig>): OmcsaCo
       ...user.persistence,
     },
     maturity: user.maturity ?? defaults.maturity,
+    workflows: user.workflows,
   };
 }
 
@@ -72,11 +74,14 @@ export function generateConfig(agents: DiscoveredAgent[]): OmcsaConfig {
     };
   }
 
+  const workflows = generateSuggestedWorkflows(agents);
+
   return {
     agents: agentConfigs,
     features: { ...DEFAULT_CONFIG.features },
     keywords: { ...DEFAULT_CONFIG.keywords },
     persistence: { ...DEFAULT_CONFIG.persistence },
+    workflows: Object.keys(workflows).length > 0 ? workflows : undefined,
   };
 }
 

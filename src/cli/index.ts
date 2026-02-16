@@ -106,6 +106,34 @@ program
     await runDoctor(options);
   });
 
+const workflowCmd = program
+  .command('workflow')
+  .description('Manage agent workflow pipelines');
+
+// Bare "omcsa workflow" → list
+workflowCmd
+  .action(async () => {
+    const { runWorkflowList } = await import('./workflow.js');
+    await runWorkflowList();
+  });
+
+workflowCmd
+  .command('add [agents...]')
+  .description('Add workflows ("all" for auto-generate, or list agents)')
+  .option('--name <name>', 'Custom workflow name')
+  .action(async (agents: string[], options: { name?: string }) => {
+    const { runWorkflowAdd } = await import('./workflow.js');
+    await runWorkflowAdd(agents, options);
+  });
+
+workflowCmd
+  .command('rm <name>')
+  .description('Remove a workflow')
+  .action(async (name: string) => {
+    const { runWorkflowRemove } = await import('./workflow.js');
+    await runWorkflowRemove(name);
+  });
+
 const omcCmd = program
   .command('omc')
   .description('Manage oh-my-claudecode (OMC) plugin');

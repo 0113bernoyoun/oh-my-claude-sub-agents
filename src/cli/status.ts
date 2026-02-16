@@ -140,6 +140,36 @@ export async function runStatus(options?: { logs?: boolean; cleanLogs?: string }
     console.log(chalk.dim('  Active modes: none'));
   }
 
+  // Active workflow (runtime state)
+  const workflowStatePath = join(stateDir, 'workflow-state.json');
+  if (existsSync(workflowStatePath)) {
+    try {
+      const wfState = JSON.parse(readFileSync(workflowStatePath, 'utf-8'));
+      if (wfState.active) {
+        console.log(chalk.magenta(`  Active workflow: ${wfState.workflowName} (step ${wfState.currentStepIndex}/${wfState.steps.length})`));
+        for (let i = 0; i < wfState.steps.length; i++) {
+          const step = wfState.steps[i];
+          if (i < wfState.currentStepIndex) {
+            console.log(chalk.green(`    \u2713 ${step}`));
+          } else if (i === wfState.currentStepIndex) {
+            console.log(chalk.cyan(`    \u2192 ${step} (next)`));
+          } else {
+            console.log(chalk.dim(`    \u25CB ${step}`));
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Configured workflows
+  if (config.workflows && Object.keys(config.workflows).length > 0) {
+    const entries = Object.entries(config.workflows);
+    console.log(chalk.cyan(`  Workflows: ${entries.length} configured`));
+    for (const [name, wf] of entries) {
+      console.log(`    - ${name}: ${wf.steps.join(' \u2192 ')}`);
+    }
+  }
+
   // Check settings.json
   const settingsPath = join(projectRoot, '.claude', 'settings.json');
   if (existsSync(settingsPath)) {

@@ -69,6 +69,7 @@ export interface OmcsaConfig {
   keywords?: KeywordsConfig;
   persistence?: PersistenceConfig;
   maturity?: MaturityConfig;
+  workflows?: WorkflowsConfig;
 }
 
 // ─── Hook Types ──────────────────────────────────────────────────────────────
@@ -195,6 +196,28 @@ export interface AgentLogEntry {
   description: string;
   timestamp: string;
   sessionId: string;
+}
+
+// ─── Workflow Types ──────────────────────────────────────────────────────────
+
+export type WorkflowMode = 'sequential';
+
+export interface WorkflowDefinition {
+  steps: string[];
+  mode: WorkflowMode;
+}
+
+export type WorkflowsConfig = Record<string, WorkflowDefinition>;
+
+export interface WorkflowState {
+  active: boolean;
+  workflowName: string;
+  steps: string[];
+  currentStepIndex: number;
+  completedSteps: string[];
+  sessionId: string;
+  startedAt: string;
+  lastUpdatedAt: string;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────

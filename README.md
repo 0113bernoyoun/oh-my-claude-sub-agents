@@ -197,7 +197,11 @@ omcsa cancel
 | `omcsa apply --maturity <mode>` | Apply with specified maturity mode |
 | `omcsa doctor` | Diagnose OMCSA installation and suggest fixes |
 | `omcsa doctor --fix` | Auto-fix fixable issues |
-| `omcsa cancel` | Cancel any active persistent mode (ralph/ultrawork) |
+| `omcsa workflow` | List configured workflows |
+| `omcsa workflow add all` | Auto-generate workflows from agent categories |
+| `omcsa workflow add <agents...>` | Add a custom workflow (name auto-generated) |
+| `omcsa workflow rm <name>` | Remove a workflow |
+| `omcsa cancel` | Cancel any active persistent mode (ralph/ultrawork/workflow) |
 | `omcsa omc disable` | Disable OMC plugin globally (removes from `~/.claude/settings.json`) |
 | `omcsa omc enable` | Re-enable OMC plugin (restore from backup) |
 | `omcsa uninstall` | Remove all OMCSA components from the project |
@@ -511,6 +515,26 @@ model: haiku
 
 You are a test writer. Write comprehensive tests for the given code.
 ```
+
+### Workflow Pipelines
+
+OMCSA auto-generates workflow suggestions based on your agents' categories:
+
+```bash
+omcsa init
+# Workflow pipelines available for your agents:
+#     default: backend-dev -> code-reviewer -> test-writer
+
+omcsa workflow add all          # Activate all suggested workflows
+omcsa workflow add my-flow a b c  # Custom workflow
+omcsa workflow rm my-flow       # Remove a workflow
+```
+
+When the first agent in a workflow is called, OMCSA auto-activates pipeline tracking.
+After each step, a system message guides Claude to the next agent.
+
+View progress: `omcsa status`
+Cancel: `omcsa cancel`
 
 ---
 

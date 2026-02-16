@@ -25,6 +25,7 @@ import { detectOmc, resolveInstallMode, saveMode, isValidMode } from '../core/om
 import { analyzeMaturity, resolveMaturityLevel } from '../core/maturity-analyzer.js';
 import { scanOmcAgents } from '../core/omc-agent-scanner.js';
 import { DryRunCollector, displayDryRunReport } from '../core/dry-run.js';
+import { generateSuggestedWorkflows } from '../core/workflow-generator.js';
 import type { OmcsaConfig, InstallMode, PromptOptions } from '../core/types.js';
 
 interface InitOptions {
@@ -232,6 +233,18 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
 
   // Summary
   console.log(chalk.green('\n  Setup complete!'));
+
+  // Suggest workflows if none configured yet
+  if (!config.workflows || Object.keys(config.workflows).length === 0) {
+    const suggested = generateSuggestedWorkflows(agents);
+    if (Object.keys(suggested).length > 0) {
+      console.log(chalk.dim('\n  Workflow pipelines available for your agents:'));
+      for (const [name, wf] of Object.entries(suggested)) {
+        console.log(chalk.dim(`    ${name}: ${wf.steps.join(' \u2192 ')}`));
+      }
+      console.log(chalk.dim('  Add with: omcsa workflow add all'));
+    }
+  }
 
   if (mode === 'standalone') {
     console.log(chalk.dim('\n  OMCSA handles all orchestration. Try these in Claude Code:\n'));
