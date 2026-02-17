@@ -1,6 +1,6 @@
 {
   "name": "oh-my-claude-sub-agents",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Auto-detect custom Claude Code agents and add OMC-level orchestration with one command",
   "type": "module",
   "main": "dist/cli/index.js",
