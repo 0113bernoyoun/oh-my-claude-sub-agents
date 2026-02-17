@@ -116,7 +116,7 @@ omcsa init
 This will:
 1. Scan `~/.claude/agents/` and `.claude/agents/` for all agent files
 2. Detect OMC (oh-my-claudecode) if installed
-3. Generate an orchestrator prompt and append it to `.claude/CLAUDE.md`
+3. Generate orchestrator prompt to `.claude/omcsa-agents.md` and add `@import` reference to `.claude/CLAUDE.md`
 4. Install smart hook scripts into `.claude/hooks/`
 5. Register hooks in `.claude/settings.json`
 6. Save install mode to `.omcsa/mode.json`
@@ -181,20 +181,23 @@ omcsa cancel
 
 | Command | Description |
 |---------|-------------|
-| `omcsa init` | Initial setup: scan agents, generate prompt, install hooks |
+| `omcsa init` | Initial setup: scan agents, generate prompt to external file, install hooks |
 | `omcsa init --config` | Same as init but also generates `omcsa.config.json` for fine-tuning |
 | `omcsa init --mode <mode>` | Init with explicit mode: `standalone`, `omc-only`, or `integrated` |
+| `omcsa init --output <mode>` | Output mode: `external` (default) or `inline` |
 | `omcsa init --dry-run` | Preview init changes without applying them |
-| `omcsa init --maturity <mode>` | Set maturity mode: `full`, `auto`, `LOW`, `MEDIUM`, or `HIGH` |
+| `omcsa init --maturity <mode>` | Set maturity mode: `auto`, `full`, `LOW`, `MEDIUM`, or `HIGH` |
 | `omcsa switch <mode>` | Switch install mode at runtime (no reinstall needed) |
 | `omcsa status` | Show current configuration, OMC detection, and install mode |
 | `omcsa status --logs` | Show today's full orchestration log |
 | `omcsa status --clean-logs <N>` | Remove logs older than N days |
 | `omcsa refresh` | Re-scan agents and regenerate orchestrator prompt |
 | `omcsa refresh --maturity <mode>` | Re-scan with specified maturity mode |
+| `omcsa refresh --output <mode>` | Refresh with specified output mode |
 | `omcsa apply` | Re-apply config changes after editing `omcsa.config.json` |
 | `omcsa apply --dry-run` | Preview apply changes without modifying files |
 | `omcsa apply --maturity <mode>` | Apply with specified maturity mode |
+| `omcsa apply --output <mode>` | Apply with specified output mode |
 | `omcsa doctor` | Diagnose OMCSA installation and suggest fixes |
 | `omcsa doctor --fix` | Auto-fix fixable issues |
 | `omcsa workflow` | List configured workflows |
@@ -229,7 +232,8 @@ This creates `.claude/omcsa.config.json`:
     "ultrawork": true,
     "ralph": true,
     "delegationEnforcement": "warn",
-    "modelTiering": true
+    "modelTiering": true,
+    "outputMode": "external"
   },
   "keywords": {
     "ultrawork": ["ultrawork", "ulw"],
@@ -241,7 +245,7 @@ This creates `.claude/omcsa.config.json`:
     "stateDir": ".omcsa/state"
   },
   "maturity": {
-    "mode": "full"
+    "mode": "auto"
   }
 }
 ```
@@ -250,19 +254,19 @@ After editing, run `omcsa apply` to regenerate.
 
 ### Smart Prompt (Maturity-Based)
 
-OMCSA analyzes your CLAUDE.md to determine your orchestration maturity level and can adjust the prompt detail accordingly.
+OMCSA analyzes your CLAUDE.md to determine your orchestration maturity level and adjusts prompt detail accordingly.
 
-**Default behavior** (backward compatible): Full prompt is always generated, with maturity score shown in the log output.
+**Default behavior**: `auto` mode detects your maturity score and generates an appropriately condensed prompt. Experienced users get shorter prompts automatically.
 
 ```
-Maturity: MEDIUM (0.42) — Full prompt generated (default). Use --maturity auto for adaptive prompts.
+Maturity: MEDIUM (0.42) — Adaptive prompt generated (auto mode).
 ```
 
-**Opt-in adaptive mode**: Use `--maturity auto` to let OMCSA adjust prompt verbosity:
+Use `--maturity full` if you want the full verbose prompt regardless of detected maturity:
 
 ```bash
-omcsa init --maturity auto    # Analyze and adapt
-omcsa refresh --maturity auto # Re-scan with adaptive prompt
+omcsa init --maturity full     # Always generate full prompt
+omcsa refresh --maturity full  # Re-scan with full prompt
 ```
 
 **Maturity levels:**
@@ -283,9 +287,35 @@ omcsa refresh --maturity auto # Re-scan with adaptive prompt
 }
 ```
 
-Valid modes: `"full"` (default), `"auto"`, `"LOW"`, `"MEDIUM"`, `"HIGH"`
+Valid modes: `"auto"` (default), `"full"`, `"LOW"`, `"MEDIUM"`, `"HIGH"`
 
 CLI flag `--maturity` overrides config.
+
+### Output Modes
+
+OMCSA supports two output modes for the generated orchestrator prompt:
+
+| Mode | Description |
+|------|-------------|
+| `external` (default) | Writes orchestrator prompt to `.claude/omcsa-agents.md` and places an `@omcsa-agents.md` import reference inside CLAUDE.md. Keeps CLAUDE.md small (~99% reduction of the OMCSA section). |
+| `inline` | Embeds the full orchestrator prompt directly inside CLAUDE.md between the OMCSA markers. This was the default behavior in earlier versions. |
+
+Set via CLI flag or config:
+
+```bash
+omcsa init --output external   # Default — separate file with @import
+omcsa init --output inline     # Legacy — embed directly in CLAUDE.md
+```
+
+Or persist in `omcsa.config.json`:
+
+```json
+{
+  "features": {
+    "outputMode": "external"
+  }
+}
+```
 
 ### Delegation Enforcement Levels
 
@@ -429,7 +459,8 @@ After `omcsa init`, your project will have:
 ```
 your-project/
 ├── .claude/
-│   ├── CLAUDE.md              ← orchestrator prompt appended here
+│   ├── CLAUDE.md              ← @import reference added here
+│   ├── omcsa-agents.md        ← orchestrator prompt (external mode)
 │   ├── settings.json          ← hook registrations added here
 │   ├── hooks/
 │   │   ├── omcsa-keyword-detector.mjs    ← detects ultrawork/ralph keywords
@@ -449,17 +480,29 @@ your-project/
 
 ### CLAUDE.md Markers
 
-OMCSA only modifies content between its markers:
+OMCSA only modifies content between its markers.
+
+**External mode** (default) -- the markers contain a single `@import` reference, keeping CLAUDE.md small:
 
 ```markdown
 # Your existing CLAUDE.md content (preserved)
 
 <!-- [OMCSA:START] - Auto-generated by oh-my-claude-sub-agents. Do not edit manually. -->
-## Agent Orchestration
-...
+@omcsa-agents.md
 <!-- [OMCSA:END] -->
 
 # More of your content (preserved)
+```
+
+The full orchestrator prompt lives in `.claude/omcsa-agents.md`.
+
+**Inline mode** (`--output inline`) -- the markers contain the full prompt directly:
+
+```markdown
+<!-- [OMCSA:START] - Auto-generated by oh-my-claude-sub-agents. Do not edit manually. -->
+## Agent Orchestration
+...
+<!-- [OMCSA:END] -->
 ```
 
 Running `omcsa refresh` or `omcsa uninstall` only touches content between these markers.
@@ -558,7 +601,7 @@ Check your OMCSA installation health:
 omcsa doctor
 ```
 
-Output includes hook file checks, settings registration, mode validation, agent file validation, CLAUDE.md section integrity, and maturity analysis.
+Output includes hook file checks, settings registration, mode validation, agent file validation, CLAUDE.md section integrity, maturity analysis, external file consistency (orphaned or missing `omcsa-agents.md`), and CLAUDE.md size warnings when inline mode exceeds 15KB.
 
 Auto-fix supported issues:
 
@@ -607,6 +650,7 @@ omcsa uninstall
 This removes:
 - Hook scripts from `.claude/hooks/`
 - OMCSA section from `.claude/CLAUDE.md`
+- External prompt file `.claude/omcsa-agents.md` (if present)
 - Hook registrations from `.claude/settings.json`
 - State directory `.omcsa/`
 
