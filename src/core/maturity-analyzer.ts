@@ -232,19 +232,19 @@ export function analyzeMaturity(cleanedContent: string, agents: DiscoveredAgent[
 /**
  * Resolve the effective maturity level based on CLI flags and config.
  *
- * Priority: CLI flag > config > default ("full")
+ * Priority: CLI flag > config > default ("auto")
  *
  * @param cliMaturity - CLI --maturity flag value
  * @param configMode - Config maturity.mode value
  * @param analyzed - Result from analyzeMaturity()
- * @returns The maturity level to use, or null for "full" mode (always LOW/full prompt)
+ * @returns The maturity level to use
  */
 export function resolveMaturityLevel(
   cliMaturity: string | undefined,
   configMode: string | undefined,
   analyzed: MaturityResult,
 ): MaturityLevel {
-  const effective = cliMaturity || configMode || 'full';
+  const effective = cliMaturity || configMode || 'auto';
 
   switch (effective) {
     case 'auto':

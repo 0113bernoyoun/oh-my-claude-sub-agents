@@ -8,6 +8,8 @@
  * orchestration with OMC agents.
  */
 
+import { existsSync, rmSync } from 'fs';
+import { join } from 'path';
 import {
   DiscoveredAgent,
   OmcsaConfig,
@@ -15,6 +17,8 @@ import {
   AgentCategory,
   OMCSA_MARKER_START,
   OMCSA_MARKER_END,
+  OMCSA_EXTERNAL_FILENAME,
+  OMCSA_IMPORT_DIRECTIVE,
   DEFAULT_CONFIG,
 } from './types.js';
 import type { MaturityLevel, PromptOptions, WorkflowsConfig } from './types.js';
@@ -379,12 +383,13 @@ function generateIntegratedSection(
 // ─── Main Prompt Generation ─────────────────────────────────────────────────
 
 /**
- * Generate the complete orchestrator prompt.
+ * Generate the orchestrator prompt content WITHOUT markers.
+ * This is the raw content that goes into the external file or inline section.
  *
  * @param agents - Discovered custom agents
  * @param options - Prompt generation options (config, maturity, mode, OMC agents)
  */
-export function generateOrchestratorPrompt(
+export function generateOrchestratorPromptContent(
   agents: DiscoveredAgent[],
   options?: PromptOptions,
 ): string {
@@ -400,7 +405,7 @@ export function generateOrchestratorPrompt(
   // For integrated mode with OMC agents, generate specialized prompt
   const isIntegrated = mode === 'integrated' && omcAgents && omcAgents.length > 0;
 
-  const sections: string[] = [OMCSA_MARKER_START];
+  const sections: string[] = [];
 
   if (maturityLevel === 'HIGH') {
     // HIGH maturity: minimal registry + mode keywords only
@@ -582,9 +587,54 @@ and execute them before considering the task complete.`,
     }
   }
 
-  sections.push(OMCSA_MARKER_END);
-
   return sections.join('\n');
+}
+
+/**
+ * Generate the complete orchestrator prompt with markers (for inline mode).
+ *
+ * @param agents - Discovered custom agents
+ * @param options - Prompt generation options (config, maturity, mode, OMC agents)
+ */
+export function generateOrchestratorPrompt(
+  agents: DiscoveredAgent[],
+  options?: PromptOptions,
+): string {
+  const content = generateOrchestratorPromptContent(agents, options);
+  return `${OMCSA_MARKER_START}\n${content}\n${OMCSA_MARKER_END}`;
+}
+
+/**
+ * Generate the @import reference stub to be placed in CLAUDE.md (for external mode).
+ * Contains only markers and the import directive.
+ */
+export function generateImportReference(): string {
+  return `${OMCSA_MARKER_START}\n${OMCSA_IMPORT_DIRECTIVE}\n${OMCSA_MARKER_END}`;
+}
+
+/**
+ * Check if the OMCSA section in CLAUDE.md content is an external @import reference.
+ */
+export function isExternalReference(content: string): boolean {
+  const startIdx = content.indexOf(OMCSA_MARKER_START);
+  const endIdx = content.indexOf(OMCSA_MARKER_END);
+
+  if (startIdx === -1 || endIdx === -1) return false;
+
+  const section = content.slice(startIdx + OMCSA_MARKER_START.length, endIdx).trim();
+  return section === OMCSA_IMPORT_DIRECTIVE;
+}
+
+/**
+ * Remove the external omcsa-agents.md file if it exists.
+ */
+export function removeExternalFile(projectRoot: string): boolean {
+  const externalPath = join(projectRoot, '.claude', OMCSA_EXTERNAL_FILENAME);
+  if (existsSync(externalPath)) {
+    rmSync(externalPath);
+    return true;
+  }
+  return false;
 }
 
 // ─── CLAUDE.md Operations ───────────────────────────────────────────────────

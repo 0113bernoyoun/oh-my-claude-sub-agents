@@ -17,7 +17,14 @@ import chalk from 'chalk';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { scanAgents } from '../core/scanner.js';
-import { generateOrchestratorPrompt, updateClaudeMdContent, removeOmcsaSection } from '../core/prompt-generator.js';
+import {
+  generateOrchestratorPrompt,
+  generateOrchestratorPromptContent,
+  generateImportReference,
+  updateClaudeMdContent,
+  removeOmcsaSection,
+  removeExternalFile,
+} from '../core/prompt-generator.js';
 import { loadConfig, generateConfig, writeConfig } from '../core/config-loader.js';
 import { installHooks, getHookCommands } from '../installer/hooks-installer.js';
 import { addHooksToSettings } from '../installer/settings-updater.js';
@@ -26,12 +33,14 @@ import { analyzeMaturity, resolveMaturityLevel } from '../core/maturity-analyzer
 import { scanOmcAgents } from '../core/omc-agent-scanner.js';
 import { DryRunCollector, displayDryRunReport } from '../core/dry-run.js';
 import { generateSuggestedWorkflows } from '../core/workflow-generator.js';
-import type { OmcsaConfig, InstallMode, PromptOptions } from '../core/types.js';
+import type { OmcsaConfig, InstallMode, PromptOptions, PromptOutputMode } from '../core/types.js';
+import { OMCSA_EXTERNAL_FILENAME, CLAUDE_MD_SIZE_WARNING_BYTES } from '../core/types.js';
 
 interface InitOptions {
   config?: boolean;
   mode?: string;
   maturity?: string;
+  output?: string;
   dryRun?: boolean;
 }
 
@@ -136,7 +145,12 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     }
   }
 
-  // Step 8: Generate orchestrator prompt
+  // Step 8: Resolve output mode
+  const outputMode: PromptOutputMode = (options.output === 'inline' || options.output === 'external')
+    ? options.output
+    : (config.features?.outputMode || 'external');
+
+  // Step 9: Generate orchestrator prompt
   const promptOptions: PromptOptions = {
     config,
     omcDetected: omcResult.found && mode === 'standalone',
@@ -144,10 +158,22 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     mode,
     omcAgents,
   };
-  const prompt = generateOrchestratorPrompt(agents, promptOptions);
 
-  // Step 9: Compute all changes
-  const updatedContent = updateClaudeMdContent(existingContent, prompt);
+  const externalFilePath = join(projectRoot, '.claude', OMCSA_EXTERNAL_FILENAME);
+
+  let updatedContent: string;
+  let externalFileContent: string | undefined;
+
+  if (outputMode === 'external') {
+    // External mode: content goes to separate file, CLAUDE.md gets @import reference
+    externalFileContent = generateOrchestratorPromptContent(agents, promptOptions);
+    const importRef = generateImportReference();
+    updatedContent = updateClaudeMdContent(existingContent, importRef);
+  } else {
+    // Inline mode: full content goes into CLAUDE.md (legacy behavior)
+    const prompt = generateOrchestratorPrompt(agents, promptOptions);
+    updatedContent = updateClaudeMdContent(existingContent, prompt);
+  }
 
   // If dry-run, collect and display changes without executing
   if (options.dryRun) {
@@ -155,6 +181,11 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
 
     // CLAUDE.md
     collector.recordFileWrite(claudeMdPath, updatedContent, existingContent || undefined);
+
+    // External file
+    if (outputMode === 'external' && externalFileContent) {
+      collector.recordFileWrite(externalFilePath, externalFileContent);
+    }
 
     // Config file
     if (options.config) {
@@ -196,12 +227,35 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     console.log(chalk.green('  Generated config → .claude/omcsa.config.json'));
   }
 
-  // Update CLAUDE.md
+  // Ensure .claude/ directory exists
   if (!existsSync(join(projectRoot, '.claude'))) {
     mkdirSync(join(projectRoot, '.claude'), { recursive: true });
   }
-  writeFileSync(claudeMdPath, updatedContent, 'utf-8');
-  console.log(chalk.green('  Generated orchestrator prompt → .claude/CLAUDE.md'));
+
+  if (outputMode === 'external') {
+    // Write external file
+    writeFileSync(externalFilePath, externalFileContent!, 'utf-8');
+    console.log(chalk.green(`  Generated orchestrator prompt → .claude/${OMCSA_EXTERNAL_FILENAME}`));
+
+    // Update CLAUDE.md with @import reference
+    writeFileSync(claudeMdPath, updatedContent, 'utf-8');
+    console.log(chalk.green('  Added @import reference → .claude/CLAUDE.md'));
+  } else {
+    // Inline mode: write full content to CLAUDE.md
+    writeFileSync(claudeMdPath, updatedContent, 'utf-8');
+    console.log(chalk.green('  Generated orchestrator prompt → .claude/CLAUDE.md'));
+
+    // Clean up external file if switching from external to inline
+    if (removeExternalFile(projectRoot)) {
+      console.log(chalk.green(`  Removed ${OMCSA_EXTERNAL_FILENAME} (switched to inline)`));
+    }
+
+    // Size warning for inline mode
+    const claudeMdSize = Buffer.byteLength(updatedContent, 'utf-8');
+    if (claudeMdSize > CLAUDE_MD_SIZE_WARNING_BYTES) {
+      console.log(chalk.yellow(`\n  ⚠ CLAUDE.md is ${(claudeMdSize / 1024).toFixed(1)}KB. Consider using --output external to reduce size.`));
+    }
+  }
 
   // Install hooks (ALWAYS — smart hooks handle mode at runtime)
   const { installed, skipped } = installHooks(projectRoot);

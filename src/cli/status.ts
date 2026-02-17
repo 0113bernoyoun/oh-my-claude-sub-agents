@@ -11,10 +11,10 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { scanAgents } from '../core/scanner.js';
 import { loadConfig } from '../core/config-loader.js';
-import { OMCSA_MARKER_START } from '../core/types.js';
+import { OMCSA_MARKER_START, OMCSA_EXTERNAL_FILENAME } from '../core/types.js';
 import { detectOmc, loadMode } from '../core/omc-detector.js';
 import { analyzeMaturity } from '../core/maturity-analyzer.js';
-import { removeOmcsaSection } from '../core/prompt-generator.js';
+import { removeOmcsaSection, isExternalReference } from '../core/prompt-generator.js';
 import { getLastSession, getTodayLogs, cleanOldLogs } from '../core/log-reader.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -77,13 +77,25 @@ export async function runStatus(options?: { logs?: boolean; cleanLogs?: string }
 
   // Check CLAUDE.md
   const claudeMdPath = join(projectRoot, '.claude', 'CLAUDE.md');
+  const externalFilePath = join(projectRoot, '.claude', OMCSA_EXTERNAL_FILENAME);
   if (existsSync(claudeMdPath)) {
     const content = readFileSync(claudeMdPath, 'utf-8');
     const hasOmcsa = content.includes(OMCSA_MARKER_START);
-    console.log(hasOmcsa
-      ? chalk.green('  CLAUDE.md: OMCSA section present')
-      : chalk.yellow('  CLAUDE.md: exists but no OMCSA section (run `omcsa init`)')
-    );
+
+    if (hasOmcsa) {
+      const isExternal = isExternalReference(content);
+      if (isExternal) {
+        const externalExists = existsSync(externalFilePath);
+        console.log(chalk.green(`  CLAUDE.md: OMCSA section present (output: external → ${OMCSA_EXTERNAL_FILENAME})`));
+        if (!externalExists) {
+          console.log(chalk.yellow(`  ⚠ ${OMCSA_EXTERNAL_FILENAME} not found! Run \`omcsa refresh\` to regenerate.`));
+        }
+      } else {
+        console.log(chalk.green('  CLAUDE.md: OMCSA section present (output: inline)'));
+      }
+    } else {
+      console.log(chalk.yellow('  CLAUDE.md: exists but no OMCSA section (run `omcsa init`)'));
+    }
   } else {
     console.log(chalk.yellow('  CLAUDE.md: not found'));
   }

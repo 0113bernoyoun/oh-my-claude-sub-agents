@@ -38,6 +38,7 @@ program
   .option('--config', 'Generate omcsa.config.json for fine-grained control')
   .option('--mode <mode>', 'Install mode: standalone | omc-only | integrated')
   .option('--maturity <mode>', 'Maturity mode: auto | full | LOW | MEDIUM | HIGH')
+  .option('--output <mode>', 'Output mode: inline | external (default: external)')
   .option('--dry-run', 'Preview changes without applying them')
   .action(async (options) => {
     const { runInit } = await import('./init.js');
@@ -48,6 +49,7 @@ program
   .command('apply')
   .description('Re-apply configuration changes (re-scan + regenerate prompt)')
   .option('--maturity <mode>', 'Maturity mode: auto | full | LOW | MEDIUM | HIGH')
+  .option('--output <mode>', 'Output mode: inline | external (default: external)')
   .option('--dry-run', 'Preview changes without applying them')
   .action(async (options) => {
     const { runApply } = await import('./apply.js');
@@ -68,6 +70,7 @@ program
   .command('refresh')
   .description('Re-scan .claude/agents/ and regenerate orchestrator prompt')
   .option('--maturity <mode>', 'Maturity mode: auto | full | LOW | MEDIUM | HIGH')
+  .option('--output <mode>', 'Output mode: inline | external (default: external)')
   .action(async (options) => {
     const { runRefresh } = await import('./refresh.js');
     await runRefresh(options);

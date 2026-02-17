@@ -9,15 +9,24 @@ import chalk from 'chalk';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { scanAgents } from '../core/scanner.js';
-import { generateOrchestratorPrompt, updateClaudeMdContent, removeOmcsaSection } from '../core/prompt-generator.js';
+import {
+  generateOrchestratorPrompt,
+  generateOrchestratorPromptContent,
+  generateImportReference,
+  updateClaudeMdContent,
+  removeOmcsaSection,
+  removeExternalFile,
+} from '../core/prompt-generator.js';
 import { loadConfig, applyConfigOverrides } from '../core/config-loader.js';
 import { detectOmc, loadMode } from '../core/omc-detector.js';
 import { analyzeMaturity, resolveMaturityLevel } from '../core/maturity-analyzer.js';
 import { scanOmcAgents } from '../core/omc-agent-scanner.js';
-import type { PromptOptions } from '../core/types.js';
+import type { PromptOptions, PromptOutputMode } from '../core/types.js';
+import { OMCSA_EXTERNAL_FILENAME } from '../core/types.js';
 
 interface RefreshOptions {
   maturity?: string;
+  output?: string;
 }
 
 export async function runRefresh(options: RefreshOptions = {}): Promise<void> {
@@ -38,8 +47,14 @@ export async function runRefresh(options: RefreshOptions = {}): Promise<void> {
       const content = readFileSync(claudeMdPath, 'utf-8');
       const updated = removeOmcsaSection(content);
       writeFileSync(claudeMdPath, updated, 'utf-8');
-      console.log(chalk.green('  Removed OMCSA section from CLAUDE.md\n'));
+      console.log(chalk.green('  Removed OMCSA section from CLAUDE.md'));
     }
+
+    // Also remove external file if it exists
+    if (removeExternalFile(projectRoot)) {
+      console.log(chalk.green(`  Removed .claude/${OMCSA_EXTERNAL_FILENAME}`));
+    }
+    console.log();
     return;
   }
 
@@ -87,6 +102,11 @@ export async function runRefresh(options: RefreshOptions = {}): Promise<void> {
     omcAgents = omcScan.agents;
   }
 
+  // Resolve output mode
+  const outputMode: PromptOutputMode = (options.output === 'inline' || options.output === 'external')
+    ? options.output
+    : (config.features?.outputMode || 'external');
+
   // Regenerate prompt
   const promptOptions: PromptOptions = {
     config,
@@ -95,12 +115,31 @@ export async function runRefresh(options: RefreshOptions = {}): Promise<void> {
     mode,
     omcAgents,
   };
-  const prompt = generateOrchestratorPrompt(agents, promptOptions);
 
-  // Update CLAUDE.md
-  const updatedContent = updateClaudeMdContent(existingContent, prompt);
-  writeFileSync(claudeMdPath, updatedContent, 'utf-8');
+  const externalFilePath = join(projectRoot, '.claude', OMCSA_EXTERNAL_FILENAME);
 
-  console.log(chalk.green('\n  Updated .claude/CLAUDE.md'));
+  if (outputMode === 'external') {
+    const externalFileContent = generateOrchestratorPromptContent(agents, promptOptions);
+    const importRef = generateImportReference();
+    const updatedContent = updateClaudeMdContent(existingContent, importRef);
+
+    writeFileSync(externalFilePath, externalFileContent, 'utf-8');
+    writeFileSync(claudeMdPath, updatedContent, 'utf-8');
+
+    console.log(chalk.green(`\n  Updated .claude/${OMCSA_EXTERNAL_FILENAME}`));
+    console.log(chalk.green('  Updated .claude/CLAUDE.md (@import reference)'));
+  } else {
+    const prompt = generateOrchestratorPrompt(agents, promptOptions);
+    const updatedContent = updateClaudeMdContent(existingContent, prompt);
+    writeFileSync(claudeMdPath, updatedContent, 'utf-8');
+
+    console.log(chalk.green('\n  Updated .claude/CLAUDE.md'));
+
+    // Clean up external file if switching
+    if (removeExternalFile(projectRoot)) {
+      console.log(chalk.green(`  Removed ${OMCSA_EXTERNAL_FILENAME} (switched to inline)`));
+    }
+  }
+
   console.log(chalk.green('  Refresh complete!\n'));
 }

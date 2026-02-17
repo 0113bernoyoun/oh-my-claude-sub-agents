@@ -13,8 +13,8 @@ import { scanAgents } from './scanner.js';
 import { loadConfig } from './config-loader.js';
 import { detectOmc, loadMode, isValidMode } from './omc-detector.js';
 import { analyzeMaturity } from './maturity-analyzer.js';
-import { removeOmcsaSection } from './prompt-generator.js';
-import { OMCSA_MARKER_START, OMCSA_MARKER_END } from './types.js';
+import { removeOmcsaSection, isExternalReference } from './prompt-generator.js';
+import { OMCSA_MARKER_START, OMCSA_MARKER_END, OMCSA_EXTERNAL_FILENAME, CLAUDE_MD_SIZE_WARNING_BYTES } from './types.js';
 import type { DiagnosticResult, DiagnosticSeverity, DoctorReport, MaturityResult } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -342,6 +342,128 @@ function checkOmcConsistency(projectRoot: string): DiagnosticResult {
   };
 }
 
+/**
+ * Check 8: External file consistency
+ */
+function checkExternalFile(projectRoot: string): DiagnosticResult {
+  const claudeMdPath = join(projectRoot, '.claude', 'CLAUDE.md');
+  const externalPath = join(projectRoot, '.claude', OMCSA_EXTERNAL_FILENAME);
+
+  if (!existsSync(claudeMdPath)) {
+    // No CLAUDE.md, nothing to check
+    if (existsSync(externalPath)) {
+      return {
+        name: 'External File',
+        severity: 'warn',
+        message: `Orphaned ${OMCSA_EXTERNAL_FILENAME} found without CLAUDE.md`,
+        fix: 'Run `omcsa init` or delete the orphaned file',
+      };
+    }
+    return {
+      name: 'External File',
+      severity: 'ok',
+      message: 'No external file (not applicable)',
+    };
+  }
+
+  const content = readFileSync(claudeMdPath, 'utf-8');
+  const hasMarkers = content.includes(OMCSA_MARKER_START);
+
+  if (!hasMarkers) {
+    if (existsSync(externalPath)) {
+      return {
+        name: 'External File',
+        severity: 'warn',
+        message: `Orphaned ${OMCSA_EXTERNAL_FILENAME} found (no OMCSA section in CLAUDE.md)`,
+        fix: 'Run `omcsa init` or delete the orphaned file',
+      };
+    }
+    return {
+      name: 'External File',
+      severity: 'ok',
+      message: 'No external file (not applicable)',
+    };
+  }
+
+  const isExternal = isExternalReference(content);
+
+  if (isExternal && !existsSync(externalPath)) {
+    return {
+      name: 'External File',
+      severity: 'error',
+      message: `CLAUDE.md references @${OMCSA_EXTERNAL_FILENAME} but file is missing`,
+      fix: 'Run `omcsa refresh` to regenerate the external file',
+    };
+  }
+
+  if (!isExternal && existsSync(externalPath)) {
+    return {
+      name: 'External File',
+      severity: 'warn',
+      message: `${OMCSA_EXTERNAL_FILENAME} exists but CLAUDE.md uses inline mode`,
+      fix: 'Run `omcsa apply --output external` to switch, or delete the orphaned file',
+    };
+  }
+
+  if (isExternal && existsSync(externalPath)) {
+    return {
+      name: 'External File',
+      severity: 'ok',
+      message: `External mode: ${OMCSA_EXTERNAL_FILENAME} present`,
+    };
+  }
+
+  return {
+    name: 'External File',
+    severity: 'ok',
+    message: 'Inline mode (no external file)',
+  };
+}
+
+/**
+ * Check 9: CLAUDE.md size warning
+ */
+function checkClaudeMdSize(projectRoot: string): DiagnosticResult {
+  const claudeMdPath = join(projectRoot, '.claude', 'CLAUDE.md');
+
+  if (!existsSync(claudeMdPath)) {
+    return {
+      name: 'CLAUDE.md Size',
+      severity: 'ok',
+      message: 'Not applicable (no CLAUDE.md)',
+    };
+  }
+
+  const content = readFileSync(claudeMdPath, 'utf-8');
+  const sizeBytes = Buffer.byteLength(content, 'utf-8');
+  const sizeKb = (sizeBytes / 1024).toFixed(1);
+
+  if (sizeBytes > CLAUDE_MD_SIZE_WARNING_BYTES) {
+    const isInline = content.includes(OMCSA_MARKER_START) && !isExternalReference(content);
+
+    if (isInline) {
+      return {
+        name: 'CLAUDE.md Size',
+        severity: 'warn',
+        message: `CLAUDE.md is ${sizeKb}KB (inline mode). Consider switching to external mode to reduce size.`,
+        fix: 'Run `omcsa apply --output external` to externalize the orchestrator prompt',
+      };
+    }
+
+    return {
+      name: 'CLAUDE.md Size',
+      severity: 'warn',
+      message: `CLAUDE.md is ${sizeKb}KB. Large files may trigger "file too long" warnings in Claude Code.`,
+    };
+  }
+
+  return {
+    name: 'CLAUDE.md Size',
+    severity: 'ok',
+    message: `CLAUDE.md size: ${sizeKb}KB`,
+  };
+}
+
 // ─── Fix Actions ────────────────────────────────────────────────────────────
 
 /**
@@ -418,6 +540,8 @@ export function runDiagnostics(projectRoot: string): DoctorReport {
   results.push(checkClaudeMdSection(projectRoot));
   results.push(checkConfigFile(projectRoot));
   results.push(checkOmcConsistency(projectRoot));
+  results.push(checkExternalFile(projectRoot));
+  results.push(checkClaudeMdSize(projectRoot));
 
   // Scan agents once for reuse
   const agents = scanAgents(projectRoot);

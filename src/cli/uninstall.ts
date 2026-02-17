@@ -12,6 +12,7 @@ import chalk from 'chalk';
 import { existsSync, readFileSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { removeOmcsaSection } from '../core/prompt-generator.js';
+import { OMCSA_EXTERNAL_FILENAME } from '../core/types.js';
 import { uninstallHooks } from '../installer/hooks-installer.js';
 import { removeHooksFromSettings } from '../installer/settings-updater.js';
 
@@ -37,6 +38,13 @@ export async function runUninstall(): Promise<void> {
     const updated = removeOmcsaSection(content);
     writeFileSync(claudeMdPath, updated, 'utf-8');
     console.log(chalk.green('  ✓ Removed OMCSA section from CLAUDE.md'));
+  }
+
+  // Remove external omcsa-agents.md file
+  const externalPath = join(projectRoot, '.claude', OMCSA_EXTERNAL_FILENAME);
+  if (existsSync(externalPath)) {
+    rmSync(externalPath);
+    console.log(chalk.green(`  ✓ Removed ${OMCSA_EXTERNAL_FILENAME}`));
   }
 
   // Remove state directory
